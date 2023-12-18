@@ -1,5 +1,7 @@
+#[derive(Debug)]
 pub struct HttpListener {
     pub id: u32,
+    
 }
 
 impl HttpListener {

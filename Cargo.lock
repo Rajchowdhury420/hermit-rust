@@ -769,6 +769,7 @@ dependencies = [
  "futures-util",
  "headers",
  "log 0.4.20",
+ "rand 0.8.5",
  "rustyline",
  "shellwords",
  "tokio",
@@ -777,6 +778,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "url 2.5.0",
  "websocket",
 ]
 

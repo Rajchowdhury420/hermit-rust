@@ -4,9 +4,10 @@ use log::info;
 
 pub mod client;
 pub mod server;
+pub mod utils;
 
 use crate::client::client::Client;
-use crate::server::server::Server;
+use crate::server::server::run as run_server;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -18,7 +19,15 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// C2 client
-    Client {},
+    Client {
+        /// Host to connect to C2 server
+        #[arg(short = 'H', long)]
+        host: String,
+
+        /// Port to connect to C2 server
+        #[arg(short = 'P', long)]
+        port: u16,
+    },
 
     /// C2 server
     Server {},
@@ -31,13 +40,13 @@ async fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Client {}) => {
+        Some(Commands::Client { host, port }) => {
             println!("Starting C2 client...");
-            let _ = Client::new().run().await;
+            let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
         },
         Some(Commands::Server {}) => {
             info!("Starting C2 server...");
-            let _ = Server::new().run().await;
+            let _ = run_server().await;
         },
         _ => {},
     }
