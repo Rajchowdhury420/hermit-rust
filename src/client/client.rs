@@ -35,7 +35,6 @@ pub enum Mode {
 
 #[derive(Debug)]
 struct ListenerOption {
-    pub id: Option<u32>,
     pub name: Option<String>,
     pub proto: Option<String>,
     pub host: Option<String>,
@@ -96,17 +95,8 @@ impl Client {
             // Listeners
             .subcommand(Command::new("add")
                 .about("Add a new listener.")
-                // .subcommand(Command::new("http")
-                //     .about("Add a new HTTP listener.")
-                // )
                 .args([
-                    Arg::new("name")
-                        .short('n')
-                        .long("name")
-                        .help("Specify the name of a listener")
-                        .value_parser(value_parser!(String)),
                     Arg::new("protocol")
-                        .long("proto")
                         .help("Protocol")
                         .default_value("http")
                         .value_parser(value_parser!(String)),
@@ -120,36 +110,36 @@ impl Client {
                         .long("port")
                         .help("Port")
                         .required(true)
-                        .value_parser(value_parser!(u16))
+                        .value_parser(value_parser!(u16)),
+                    Arg::new("name")
+                    .short('n')
+                    .long("name")
+                    .help("Specify the name of a listener")
+                    .value_parser(value_parser!(String)),
                 ])
             )
             .subcommand(Command::new("delete")
                 .about("Delete a listener.")
-                .arg(Arg::new("id")
-                    .short('i')
-                    .long("id")
-                    .help("Listener ID")
+                .arg(Arg::new("listener")
+                    .help("Listener ID or name to delete")
                     .required(true)
-                    .value_parser(value_parser!(u32))
+                    .value_parser(value_parser!(String))
                 )
             )
             .subcommand(Command::new("start")
                 .about("Start a listener.")
-                .arg(Arg::new("id")
-                    .short('i')
-                    .long("id")
+                .arg(Arg::new("listener")
+                    .help("Listener ID or name to start")
                     .required(true)
-                    .value_parser(value_parser!(u32))
+                    .value_parser(value_parser!(String))
                 )
             )
             .subcommand(Command::new("stop")
                 .about("Stop a listener.")
-                .arg(Arg::new("id")
-                    .short('i')
-                    .long("id")
-                    .help("Listener ID")
+                .arg(Arg::new("listener")
+                    .help("Listener ID or name to stop")
                     .required(true)
-                    .value_parser(value_parser!(u32))
+                    .value_parser(value_parser!(String))
                 )
             )
             .subcommand(Command::new("listeners")
@@ -189,7 +179,6 @@ impl Client {
                     None => { Some(self.server_host.to_string()) }
                 };
                 let listener_option = ListenerOption {
-                    id: None,
                     name,
                     proto: submatches.get_one::<String>("protocol").cloned(),
                     host,
@@ -197,31 +186,65 @@ impl Client {
                 };
                 options.listener_opt = Some(listener_option);
             }
+            Some(("delete", submatches)) => {
+                mode = Mode::DeleteListener;
+                let target = submatches.get_one::<String>("listener")
+                    .map(|s| s.to_owned());
+                if let Some(t) = target {
+                    options.listener_opt = Some(ListenerOption {
+                        name: Some(t),
+                        proto: None,
+                        host: None,
+                        port: None,
+                    });
+                } else {
+                    options.listener_opt = Some(ListenerOption {
+                        name: None,
+                        proto: None,
+                        host: None,
+                        port: None,
+                    });
+                }
+            }
             Some(("start", submatches)) => {
                 mode = Mode::StartListener;
-                let listener_id = submatches.get_one::<u32>("id")
-                    .map(|s| s.to_owned()).unwrap_or(0);
-                let listener_option = ListenerOption {
-                    id: Some(listener_id),
-                    name: None,
-                    proto: None,
-                    host: None,
-                    port: None,
-                };
-                options.listener_opt = Some(listener_option);
+                let target = submatches.get_one::<String>("listener")
+                    .map(|s| s.to_owned());
+                if let Some(t) = target {
+                    options.listener_opt = Some(ListenerOption {
+                        name: Some(t),
+                        proto: None,
+                        host: None,
+                        port: None,
+                    });
+                } else {
+                    options.listener_opt = Some(ListenerOption {
+                        name: None,
+                        proto: None,
+                        host: None,
+                        port: None,
+                    });
+                }
             }
             Some(("stop", submatches)) => {
                 mode = Mode::StopListener;
-                let listener_id = submatches.get_one::<u32>("id")
-                    .map(|s| s.to_owned()).unwrap_or(0);
-                let listener_option = ListenerOption {
-                    id: Some(listener_id),
-                    name: None,
-                    proto: None,
-                    host: None,
-                    port: None,
-                };
-                options.listener_opt = Some(listener_option);
+                let target = submatches.get_one::<String>("listener")
+                    .map(|s| s.to_owned());
+                if let Some(t) = target {
+                    options.listener_opt = Some(ListenerOption {
+                        name: Some(t),
+                        proto: None,
+                        host: None,
+                        port: None,
+                    });
+                } else {
+                    options.listener_opt = Some(ListenerOption {
+                        name: None,
+                        proto: None,
+                        host: None,
+                        port: None,
+                    });
+                }
             }
             Some(("listeners", _)) => {
                 mode = Mode::ListListeners;
@@ -325,16 +348,34 @@ impl Client {
                             }
                             Mode::DeleteListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
-                                    message = Message::Text(format!("delete {}", listener_opt.id.unwrap()));
+                                    if let Some(name) = listener_opt.name {
+                                        message = Message::Text(format!("delete {}", name));
+                                    } else {
+                                        println!("Specify target listener by ID or name.");
+                                    }
+                                } else {
+                                    continue;
                                 }
                             }
                             Mode::StartListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
-                                    message = Message::Text(format!("start {}", listener_opt.id.unwrap()));
+                                    if let Some(name) = listener_opt.name {
+                                        message = Message::Text(format!("start {}", name));
+                                    } else {
+                                        println!("Specify target listener by ID or name.");
+                                    }
+                                } else {
+                                    continue;
                                 }
                             }
                             Mode::StopListener => {
-                                println!("Stop a listener.");
+                                if let Some(listener_opt) = commands.options.listener_opt {
+                                    if let Some(name) = listener_opt.name {
+                                        message = Message::Text(format!("stop {}", name));
+                                    } else {
+                                        println!("Specify target listener by ID or name.");
+                                    }
+                                }
                                 continue;
                             }
                             Mode::ListListeners => {
