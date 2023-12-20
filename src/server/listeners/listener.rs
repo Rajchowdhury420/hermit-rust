@@ -1,4 +1,10 @@
 #[derive(Debug)]
+pub enum ListenerMessage {
+    Start,
+    Stop,
+}
+
+#[derive(Debug)]
 pub struct Listener {
     pub id: u32,
     pub protocol: String,

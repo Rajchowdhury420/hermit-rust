@@ -375,8 +375,9 @@ impl Client {
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                     }
+                                } else {
+                                    continue;
                                 }
-                                continue;
                             }
                             Mode::ListListeners => {
                                 message = Message::Text("listeners".to_string());

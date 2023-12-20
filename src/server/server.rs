@@ -7,7 +7,7 @@ use axum::{
     Router,
 };
 use axum_extra::TypedHeader;
-use log::{error, info, warn};
+use log::{error, info};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
@@ -16,17 +16,15 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use url::Url;
+use warp::Filter;
 
-use super::listeners::listener::Listener;
 use super::jobs::{find_job, format_jobs, Job, JobMessage};
 use super::sessions::Session;
 
 #[derive(Debug)]
 pub struct Server {
     pub jobs: Arc<Mutex<Vec<Job>>>,
-    listeners: Vec<Listener>,
     sessions: Vec<Session>,
-
     sender: broadcast::Sender<JobMessage>,
     receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
 }
@@ -35,7 +33,6 @@ impl Server {
     pub fn new(sender: broadcast::Sender<JobMessage>, receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) -> Self {
         Self {
             jobs: Arc::new(Mutex::new(Vec::new())),
-            listeners: Vec::new(),
             sessions: Vec::new(),
             sender,
             receiver,
@@ -44,21 +41,68 @@ impl Server {
 }
 
 pub async fn run() {
-    let (mut tx, mut rx) = broadcast::channel(100);
+    let (tx, rx) = std::sync::mpsc::channel::<JobMessage>();
+    let rx_0 = Arc::new(Mutex::new(rx));
+    let rx_1 = Arc::clone(&rx_0);
+    let rx_2 = Arc::clone(&rx_0);
 
-    // Spawn thread for jobs.
-    // tokio::spawn(async move {
-    //     loop {
-    //         if let Ok(msg) = rx.recv().await {
-    //             match(msg) {
-    //                 ServerMessage::StartJob(id) => {},
-    //                 ServerMessage::StopJob(id) => {},
-    //                 ServerMessage::DeleteJob(id) => {},
-    //                 _ => {},
-    //             }
-    //         }
-    //     }
-    // });
+    let mut handles = Vec::new();
+
+    let handle_1 = tokio::spawn(async move {
+        info!("handle 1 spawn");
+        let rx = rx_1.lock().await;
+        loop {
+            info!("handle 1: running");
+            if let Ok(msg) = rx.recv() {
+                match msg {
+                    JobMessage::Start(job_id) => {
+                        info!("Start 1");
+                    },
+                    _ => {},
+                }
+            }
+        }
+    });
+
+    let handle_2 = tokio::spawn(async move {
+        info!("handle 2 spawn");
+        let rx = rx_2.lock().await;
+        loop {
+            info!("handle 2: running");
+            if let Ok(msg) = rx.recv() {
+                match msg {
+                    JobMessage::Start(job_id) => {
+                        info!("Start 2");
+                    },
+                    _ => {},
+                }
+            }
+        }
+    });
+
+    handles.push(handle_1);
+    handles.push(handle_2);
+
+    tokio::join!(futures::future::join_all(handles));
+
+    tx.send(JobMessage::Start(1)).unwrap();
+    tx.send(JobMessage::Start(2)).unwrap();
+
+    // let route_1 = warp::path!("hello" / String)
+    //     .map(|name| format!("Hello, {}!", name));
+    // let listener_1 = warp::serve(route_1)
+    //     .run(([127, 0, 0, 1], 8080));
+
+    // let route_2 = warp::path!("hello" / String)
+    //     .map(|name| format!("Hello, {}!", name));
+    // let listener_2 = warp::serve(route_2)
+    //     .run(([127, 0, 0, 1], 8081));
+
+
+    return;
+
+
+    let (tx, rx) = broadcast::channel(100);
 
     let server = Arc::new(Mutex::new(Server::new(tx, Arc::new(Mutex::new(rx)))));
 
@@ -111,17 +155,19 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
             //     return;
             // }
 
-    // let mut server_lock = server.lock().await;
-
+    let socket_arc = Arc::new(Mutex::new(socket));
     
     loop {
-        if let Some(msg) = socket.recv().await {
+        let socket_clone = Arc::clone(&socket_arc);
+        let mut socket_lock = socket_clone.lock().await;
+
+        if let Some(msg) = socket_lock.recv().await {
             if let Ok(msg) = msg {
                 // if Self::process_message(msg, who).is_break() {
                     //         let _ = socket.send(Message::Text("Finish from server.".to_string())).await;
                     //         return;
                     //     }
-                    
+
                 match msg {
                     Message::Text(text) => {
                         let server_clone = Arc::clone(&server);
@@ -149,7 +195,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             );
 
                             jobs.push(new_job);
-                            let _ = socket.send(Message::Text(format!("Listener `{url}` added."))).await;
+                            let _ = socket_lock.send(Message::Text(format!("Listener `{url}` added."))).await;
 
                         } else if text.starts_with("delete") {
                             let args = match shellwords::split(text.as_str()) {
@@ -164,15 +210,20 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             let job = match find_job(&mut jobs_owned, target.to_string()).await {
                                 Some(j) => j,
                                 None => {
-                                    let _ = socket.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
                                     continue;
                                 }
                             };
 
-                            info!("job found.");
-
-                            jobs.remove(job.id as usize);
-                            let _ = socket.send(Message::Text(format!("Listener `{target}` deleted."))).await;
+                            if !job.running {
+                                job.handle.lock().await.abort();
+                                jobs.remove(job.id as usize);
+                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` deleted."))).await;
+                            } else {
+                                let _ = socket_lock.send(
+                                    Message::Text(format!("Listener `{target}` cannot be deleted because it's running. Please stop it before deleting."))
+                                ).await;
+                            }
 
                         } else if text.starts_with("start") {
                             let args = match shellwords::split(text.as_str()) {
@@ -185,14 +236,19 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             let job = match find_job(&mut jobs, target.to_string()).await {
                                 Some(j) => j,
                                 None => {
-                                    let _ = socket.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
                                     continue;
                                 }
                             };
 
-                            job.running = true;
-                            let _ = server_lock.sender.send(JobMessage::Start(job.id));
-                            let _  = socket.send(Message::Text(format!("Listener `{target}` started."))).await;
+                            if !job.running {
+                                let _ = server_lock.sender.send(JobMessage::Start(job.id));
+                                job.running = true;
+                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` started."))).await;
+                            } else {
+                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is alread running"))).await;
+                            }
+
 
                         } else if text.starts_with("stop") {
                             let args = match shellwords::split(text.as_str()) {
@@ -205,28 +261,32 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             let job = match find_job(&mut jobs, target.to_string()).await {
                                 Some(j) => j,
                                 None => {
-                                    let _ = socket.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
                                     continue;
                                 }
                             };
 
-                            job.running = false;
-                            let _ = server_lock.sender.send(JobMessage::Stop(job.id));
-                            let _ = socket.send(Message::Text(format!("Listener `{target}` stopped."))).await;
+                            if job.running {
+                                let _ = server_lock.sender.send(JobMessage::Stop(job.id));
+                                job.running = false;
+                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` stopped."))).await;
+                            } else {
+                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is already stopped."))).await;
+                            }
 
                         } else if text.starts_with("listeners") {
                             let mut jobs = server_lock.jobs.lock().await;
                             let output = format_jobs(&mut jobs);
-                            let _ = socket.send(Message::Text(output)).await;
+                            let _ = socket_lock.send(Message::Text(output)).await;
 
                         } else if text.starts_with("generate") {
-                            let _ = socket.send(Message::Text("Generate an implant.".to_string())).await;
+                            let _ = socket_lock.send(Message::Text("Generate an implant.".to_string())).await;
 
                         } else if text.starts_with("implants") {
-                            let _ = socket.send(Message::Text("List implants".to_string())).await;
+                            let _ = socket_lock.send(Message::Text("List implants".to_string())).await;
 
                         } else {
-                            let _ = socket.send(Message::Text(format!("Unknown command: {text}"))).await;
+                            let _ = socket_lock.send(Message::Text(format!("Unknown command: {text}"))).await;
                         }
                     }
                     _ => {}
