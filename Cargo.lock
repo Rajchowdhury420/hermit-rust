@@ -825,6 +825,8 @@ dependencies = [
  "log 0.4.20",
  "rand 0.8.5",
  "rustyline",
+ "serde",
+ "serde_json",
  "shellwords",
  "tokio",
  "tokio-tungstenite",

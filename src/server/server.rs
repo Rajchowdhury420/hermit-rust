@@ -16,95 +16,43 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use url::Url;
-use warp::Filter;
 
-use super::jobs::{find_job, format_jobs, Job, JobMessage};
-use super::sessions::Session;
+use super::jobs::{check_dupl_job, find_job, format_jobs, Job, JobMessage};
+use super::agents::{Agent, format_agents};
+// use super::sessions::Session;
 
 #[derive(Debug)]
 pub struct Server {
     pub jobs: Arc<Mutex<Vec<Job>>>,
-    sessions: Vec<Session>,
-    sender: broadcast::Sender<JobMessage>,
-    receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
+    tx_job: Arc<Mutex<broadcast::Sender<JobMessage>>>,
+    pub agents: Arc<Mutex<Vec<Agent>>>,
+    // sessions: Vec<Session>,
+
 }
 
 impl Server {
-    pub fn new(sender: broadcast::Sender<JobMessage>, receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) -> Self {
+    pub fn new(tx_job: broadcast::Sender<JobMessage>) -> Self {
         Self {
             jobs: Arc::new(Mutex::new(Vec::new())),
-            sessions: Vec::new(),
-            sender,
-            receiver,
+            tx_job: Arc::new(Mutex::new(tx_job)),
+            agents: Arc::new(Mutex::new(Vec::new())),
+            // sessions: Vec::new(),
         }
+    }
+
+    pub async fn add_agent(&mut self, agent: &mut Agent) {
+        let mut agents = self.agents.lock().await;
+
+        // Update the agent ID
+        agent.id = agents.len() as u32;
+
+        agents.push(agent.to_owned());
     }
 }
 
 pub async fn run() {
-    let (tx, rx) = std::sync::mpsc::channel::<JobMessage>();
-    let rx_0 = Arc::new(Mutex::new(rx));
-    let rx_1 = Arc::clone(&rx_0);
-    let rx_2 = Arc::clone(&rx_0);
-
-    let mut handles = Vec::new();
-
-    let handle_1 = tokio::spawn(async move {
-        info!("handle 1 spawn");
-        let rx = rx_1.lock().await;
-        loop {
-            info!("handle 1: running");
-            if let Ok(msg) = rx.recv() {
-                match msg {
-                    JobMessage::Start(job_id) => {
-                        info!("Start 1");
-                    },
-                    _ => {},
-                }
-            }
-        }
-    });
-
-    let handle_2 = tokio::spawn(async move {
-        info!("handle 2 spawn");
-        let rx = rx_2.lock().await;
-        loop {
-            info!("handle 2: running");
-            if let Ok(msg) = rx.recv() {
-                match msg {
-                    JobMessage::Start(job_id) => {
-                        info!("Start 2");
-                    },
-                    _ => {},
-                }
-            }
-        }
-    });
-
-    handles.push(handle_1);
-    handles.push(handle_2);
-
-    tokio::join!(futures::future::join_all(handles));
-
-    tx.send(JobMessage::Start(1)).unwrap();
-    tx.send(JobMessage::Start(2)).unwrap();
-
-    // let route_1 = warp::path!("hello" / String)
-    //     .map(|name| format!("Hello, {}!", name));
-    // let listener_1 = warp::serve(route_1)
-    //     .run(([127, 0, 0, 1], 8080));
-
-    // let route_2 = warp::path!("hello" / String)
-    //     .map(|name| format!("Hello, {}!", name));
-    // let listener_2 = warp::serve(route_2)
-    //     .run(([127, 0, 0, 1], 8081));
-
-
-    return;
-
-
-    let (tx, rx) = broadcast::channel(100);
-
-    let server = Arc::new(Mutex::new(Server::new(tx, Arc::new(Mutex::new(rx)))));
+    let (tx_job, _rx_job) = broadcast::channel(100);
+    let server = Arc::new(Mutex::new(Server::new(tx_job)));
 
     let app = Router::new()
         .route("/hermit", get(ws_handler))
@@ -146,15 +94,7 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, server))
 }
 
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Server>>)  {
-    
-    // if socket.send(Message::Text("hello from Hermit C2 server.".to_string())).await.is_ok() {
-        //     info!("Sending a message to {who}...");
-        // } else {
-            //     error!("Could not send a message to {who}.");
-            //     return;
-            // }
-
+async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Server>>)  {
     let socket_arc = Arc::new(Mutex::new(socket));
     
     loop {
@@ -163,16 +103,10 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
 
         if let Some(msg) = socket_lock.recv().await {
             if let Ok(msg) = msg {
-                // if Self::process_message(msg, who).is_break() {
-                    //         let _ = socket.send(Message::Text("Finish from server.".to_string())).await;
-                    //         return;
-                    //     }
-
                 match msg {
                     Message::Text(text) => {
                         let server_clone = Arc::clone(&server);
                         let server_lock = server_clone.lock().await;
-                        let receiver = &server_lock.receiver;
 
                         if text.starts_with("add") {
                             let args = match shellwords::split(text.as_str()) {
@@ -181,9 +115,22 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             };
                             let name = &args[1];
                             let url = Url::parse(&args[2]).unwrap();
-
+                            
                             let mut jobs = server_lock.jobs.lock().await;
+
+                            // Check if the url already exists.
+                            match check_dupl_job(&mut jobs, url.to_owned()) {
+                                Ok(_) => {},
+                                Err(e) => {
+                                    error!("{e}");
+                                    let _ = socket_lock.send(Message::Text(format!("Error: This URL already exists."))).await;
+                                    continue;
+                                },
+                            }
+
                             let next_id = jobs.len() as u32;
+
+                            let rx_job = server_lock.tx_job.lock().await;
 
                             let new_job = Job::new(
                                 next_id,
@@ -191,7 +138,8 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                                 url.scheme().to_owned(),
                                 url.host().unwrap().to_string(),
                                 url.port().unwrap(),
-                                Arc::clone(&receiver),
+                                Arc::new(Mutex::new(rx_job.subscribe())),
+                                Arc::clone(&server_clone),
                             );
 
                             jobs.push(new_job);
@@ -200,7 +148,10 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                         } else if text.starts_with("delete") {
                             let args = match shellwords::split(text.as_str()) {
                                 Ok(args) => { args }
-                                Err(err) => { error!("Could not delete listener: {err}"); vec!["".to_string()] }
+                                Err(err) => {
+                                    error!("Could not delete listener: {err}");
+                                    vec!["".to_string()]
+                                }
                             };
                             let target = args[1].to_string();
 
@@ -242,18 +193,20 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             };
 
                             if !job.running {
-                                let _ = server_lock.sender.send(JobMessage::Start(job.id));
+                                let _ = server_lock.tx_job.lock().await.send(JobMessage::Start(job.id));
                                 job.running = true;
                                 let _ = socket_lock.send(Message::Text(format!("Listener `{target}` started."))).await;
                             } else {
                                 let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is alread running"))).await;
                             }
 
-
                         } else if text.starts_with("stop") {
                             let args = match shellwords::split(text.as_str()) {
                                 Ok(args) => { args }
-                                Err(err) => { error!("Could not stop listener: {err}"); vec!["".to_string()] }
+                                Err(err) => {
+                                    error!("Could not stop listener: {err}");
+                                    vec!["".to_string()]
+                                }
                             };
                             let target = args[1].to_string();
 
@@ -267,7 +220,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             };
 
                             if job.running {
-                                let _ = server_lock.sender.send(JobMessage::Stop(job.id));
+                                let _ = server_lock.tx_job.lock().await.send(JobMessage::Stop(job.id));
                                 job.running = false;
                                 let _ = socket_lock.send(Message::Text(format!("Listener `{target}` stopped."))).await;
                             } else {
@@ -279,11 +232,33 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, server: Arc<Mutex
                             let output = format_jobs(&mut jobs);
                             let _ = socket_lock.send(Message::Text(output)).await;
 
+                        } else if text.starts_with("agents") {
+                            let mut agents = server_lock.agents.lock().await;
+                            let output = format_agents(&mut agents);
+                            let _ = socket_lock.send(Message::Text(output)).await;
+
                         } else if text.starts_with("generate") {
-                            let _ = socket_lock.send(Message::Text("Generate an implant.".to_string())).await;
+                            let args = match shellwords::split(text.as_str()) {
+                                Ok(args) => { args }
+                                Err(err) => {
+                                    error!("Could not parse arguments: {err}");
+                                    vec!["".to_string()]
+                                }
+                            };
+                            let i_name = args[1].to_string();
+                            let i_listener_url = args[2].to_string();
+                            let i_os = args[3].to_string();
+                            let i_arch = args[4].to_string();
+                            let i_format = args[5].to_string();
+
+                            let _ = socket_lock.send(
+                                Message::Text(format!(
+                                    "Generate an implant.\nname: {}\nlistener: {}\nos: {}\narch: {}\nformat: {}\n",
+                                    i_name, i_listener_url, i_os, i_arch, i_format
+                                ))).await;
 
                         } else if text.starts_with("implants") {
-                            let _ = socket_lock.send(Message::Text("List implants".to_string())).await;
+                            let _ = socket_lock.send(Message::Text("List implants.".to_string())).await;
 
                         } else {
                             let _ = socket_lock.send(Message::Text(format!("Unknown command: {text}"))).await;

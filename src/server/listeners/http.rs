@@ -1,23 +1,42 @@
 use axum::{
-    extract::Request,
+    extract::{Request, State},
+    Extension,
+    http::StatusCode,
+    Json,
     routing::{get, post},
-    Router
+    Router,
 };
 use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
 use log::info;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use std::sync::Arc;
-use tokio::sync::{Mutex, broadcast, watch};
+use tokio::sync::{broadcast, Mutex, watch};
 use tower::Service;
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    add_extension::AddExtensionLayer,
+    trace::TraceLayer,
+};
 use tower_http::timeout::TimeoutLayer;
+
+use crate::server::agents::{Agent, RegisterAgent};
+use crate::server::server::Server;
+use crate::utils::random::random_name;
 
 use crate::server::jobs::JobMessage;
 
-pub async fn start_http_listener(job_id: u32, host: String, port: u16, receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) {
+pub async fn start_http_listener(
+    job_id: u32,
+    host: String,
+    port: u16,
+    receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
+    server: Arc<Mutex<Server>>,
+) {
     let app = Router::new()
         .route("/", get(hello))
+        .route("/reg", post(register))
+        .with_state(server)
         .route("/info", get(info))
         .layer((
             TraceLayer::new_for_http(),
@@ -96,8 +115,25 @@ pub async fn start_http_listener(job_id: u32, host: String, port: u16, receiver:
     close_tx.closed().await;
 }
 
-async fn hello() -> String {
-    "Hello, World!".to_string()
+async fn hello() -> &'static str {
+    "Hello, World!"
+}
+
+async fn register(
+    State(server): State<Arc<Mutex<Server>>>,
+    Json(payload): Json<RegisterAgent>,
+) -> (StatusCode, Json<Agent>) {
+    let agent = Agent {
+        id: 0,
+        name: random_name("agent".to_string()),
+        hostname: payload.hostname,
+        listener_url: payload.listener_url,
+    };
+
+    let mut server = server.lock().await;
+    server.add_agent(&mut agent.to_owned()).await;
+
+    (StatusCode::CREATED, Json(agent))
 }
 
 async fn info() -> String {

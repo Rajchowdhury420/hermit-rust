@@ -1,11 +1,11 @@
 use colored::Colorize;
-use futures_util::stream::FuturesUnordered;
 use log::info;
+use url::Url;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
 
-// use super::listeners::listener::ListenerMessage;
+use super::server::Server;
 use super::listeners::http::start_http_listener;
 
 #[derive(Clone, Debug)]
@@ -24,12 +24,7 @@ pub struct Job {
     pub port: u16,
     pub running: bool,
 
-    pub handle: Arc<Mutex<JoinHandle<broadcast::Sender<JobMessage>>>>,
-
-    // Receiver for job
-    pub rx_job: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
-    // Sender for listener
-    pub tx_listener: Arc<Mutex<broadcast::Sender<JobMessage>>>,
+    pub handle: Arc<Mutex<JoinHandle<JobMessage>>>,
 }
 
 impl Job {
@@ -40,29 +35,28 @@ impl Job {
         host: String,
         port: u16,
         rx_job: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
+        server: Arc<Mutex<Server>>,
     ) -> Self {
-        
-        let rx_job_clone = Arc::clone(&rx_job);
 
         let (tx_listener, rx_listener) = broadcast::channel(100);
-        let rx_listener = Arc::new(Mutex::new(rx_listener));
+        
         let tx_listener = Arc::new(Mutex::new(tx_listener));
-        let tx_listener_clone = Arc::clone(&tx_listener);
-
+        let rx_listener = Arc::new(Mutex::new(rx_listener));
+        
         let host_clone = host.clone();
-
-        info!("AAA");
         
         let handle = tokio::spawn(async move {
+            let mut rx_job = rx_job.lock().await;
             let mut running = false;
-            let mut rx_job = rx_job_clone.lock().await;
-
-            info!("BBB");
             
             loop {
+                let tx_listener_clone = Arc::clone(&tx_listener);
                 let rx_listener_clone = Arc::clone(&rx_listener);
                 let host_clone = host_clone.clone();
                 let port_clone = port.clone();
+
+                let server_clone = Arc::clone(&server);
+
                 if let Ok(msg) = rx_job.recv().await {
                     match msg  {
                         JobMessage::Start(job_id) => {
@@ -75,6 +69,7 @@ impl Job {
                                             host_clone.to_string(),
                                             port_clone,
                                             rx_listener_clone,
+                                            server_clone,
                                         ).await;
                                     });
                                 } else {
@@ -86,7 +81,7 @@ impl Job {
                             if job_id == id {
                                 if running {
                                     running = false;
-                                    let _ = tx_listener.lock().await.send(JobMessage::Stop(job_id));
+                                    let _ = tx_listener_clone.lock().await.send(JobMessage::Stop(job_id));
                                     // break;
                                 } else {
                                     info!("JobMessage: Listener is already stopped.");
@@ -107,8 +102,6 @@ impl Job {
             port,
             running: false,
             handle: Arc::new(Mutex::new(handle)),
-            rx_job,
-            tx_listener: tx_listener_clone,
         }
     }
 }
@@ -120,6 +113,19 @@ pub async fn find_job(jobs: &mut Vec<Job>, target: String) -> Option<&mut Job> {
         }
     }
     None
+}
+
+pub fn check_dupl_job(jobs: &mut Vec<Job>, url: Url) -> Result<(), std::io::ErrorKind> {
+    let proto = url.scheme().to_string();
+    let host = url.host().unwrap().to_string();
+    let port = url.port().unwrap().to_owned();
+
+    for job in jobs.iter() {
+        if job.protocol == proto && job.host == host && job.port == port {
+            return Err(std::io::ErrorKind::AlreadyExists);
+        }
+    }
+    Ok(())
 }
 
 pub fn format_jobs(jobs: &Vec<Job>) -> String  {

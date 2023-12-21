@@ -10,6 +10,11 @@ use tokio_tungstenite::{
     tungstenite::protocol::Message,
 };
 
+use super::options::{
+    implant::ImplantOption,
+    listener::ListenerOption,
+    options::Options
+};
 use crate::utils::random::random_name;
 
 const EXIT_SUCCESS: i32 = 0;
@@ -21,52 +26,36 @@ pub enum Mode {
     Exit,
     Unknown,
 
+    // Listeners
     AddListener,
     DeleteListener,
     StartListener,
     StopListener,
     ListListeners,
+
+    // Agents
+    ListAgents,
     
-    GeneratePayload,
-    ListPayloads,
+    // Implants
+    GenerateImplant,
+    ListImplants,
 
     Instruction,
 }
 
 #[derive(Debug)]
-struct ListenerOption {
-    pub name: Option<String>,
-    pub proto: Option<String>,
-    pub host: Option<String>,
-    pub port: Option<u16>,
-}
-
-#[derive(Debug)]
-struct Options {
-    pub listener_opt: Option<ListenerOption>,
-}
-
-impl Options {
-    pub fn new() -> Self {
-        Self {
-            listener_opt: None,
-        }
-    }
-}
-
-#[derive(Debug)]
 struct Commands {
     pub mode: Mode,
-    pub cmd: String,
     pub options: Options
+    // pub cmd: String,
 }
 
 impl Commands {
-    fn new(mode: Mode, cmd: String, options: Options) -> Self {
+    fn new(mode: Mode, options: Options) -> Self {
         Self {
             mode,
-            cmd,
             options,
+            // cmd,
         }
     }
 }
@@ -112,10 +101,10 @@ impl Client {
                         .required(true)
                         .value_parser(value_parser!(u16)),
                     Arg::new("name")
-                    .short('n')
-                    .long("name")
-                    .help("Specify the name of a listener")
-                    .value_parser(value_parser!(String)),
+                        .short('n')
+                        .long("name")
+                        .help("Specify the name of a listener")
+                        .value_parser(value_parser!(String)),
                 ])
             )
             .subcommand(Command::new("delete")
@@ -145,12 +134,54 @@ impl Client {
             .subcommand(Command::new("listeners")
                 .about("List listeners.")
             )
+            // Agents
+            .subcommand(Command::new("agents")
+                .about("List agents who are connected to listeners.")
+            )
             // Implants
             .subcommand(Command::new("generate")
-                .about("Generate implants.")
+                .about("Generate an implant.")
+                .arg(Arg::new("name")
+                    .short('n')
+                    .long("name")
+                    .help("Set an implant name")
+                    .value_parser(value_parser!(String))
+                )
+                .arg(Arg::new("listener")
+                    .short('l')
+                    .long("listener")
+                    .help("Listener URL that an agent connect to. e.g. 'http://10.1.2.3:3000/'")
+                    .default_value("http")
+                    .required(true)
+                    .value_parser(value_parser!(String))
+                )
+                .arg(Arg::new("os")
+                    .short('o')
+                    .long("os")
+                    .help("Target OS")
+                    .default_value("windows")
+                    .required(true)
+                    .value_parser(value_parser!(String))
+                )
+                .arg(Arg::new("arch")
+                    .short('a')
+                    .long("arch")
+                    .help("Target architecture")
+                    .default_value("amd64")
+                    .required(true)
+                    .value_parser(value_parser!(String))
+                )
+                .arg(Arg::new("format")
+                    .short('f')
+                    .long("format")
+                    .help("File format to be generated")
+                    .default_value("exe")
+                    .required(true)
+                    .value_parser(value_parser!(String))
+                )
             )
             .subcommand(Command::new("implants")
-                .about("List implants.")
+                .about("List implants generated.")
             )
             // Instructions
             // .subcommand("download")
@@ -188,74 +219,91 @@ impl Client {
             }
             Some(("delete", submatches)) => {
                 mode = Mode::DeleteListener;
-                let target = submatches.get_one::<String>("listener")
-                    .map(|s| s.to_owned());
-                if let Some(t) = target {
-                    options.listener_opt = Some(ListenerOption {
-                        name: Some(t),
-                        proto: None,
-                        host: None,
-                        port: None,
-                    });
-                } else {
-                    options.listener_opt = Some(ListenerOption {
-                        name: None,
-                        proto: None,
-                        host: None,
-                        port: None,
-                    });
-                }
+                let target = match submatches.get_one::<String>("listener") {
+                    Some(l) => { Some(l.to_string()) },
+                    None => { None },
+                };
+
+                options.listener_opt = Some(ListenerOption {
+                    name: target,
+                    proto: None,
+                    host: None,
+                    port: None,
+                });
             }
             Some(("start", submatches)) => {
                 mode = Mode::StartListener;
-                let target = submatches.get_one::<String>("listener")
-                    .map(|s| s.to_owned());
-                if let Some(t) = target {
-                    options.listener_opt = Some(ListenerOption {
-                        name: Some(t),
-                        proto: None,
-                        host: None,
-                        port: None,
-                    });
-                } else {
-                    options.listener_opt = Some(ListenerOption {
-                        name: None,
-                        proto: None,
-                        host: None,
-                        port: None,
-                    });
-                }
+                let target = match submatches.get_one::<String>("listener") {
+                    Some(l) => { Some(l.to_string()) },
+                    None => { None },
+                };
+
+                options.listener_opt = Some(ListenerOption {
+                    name: target,
+                    proto: None,
+                    host: None,
+                    port: None,
+                });
             }
             Some(("stop", submatches)) => {
                 mode = Mode::StopListener;
-                let target = submatches.get_one::<String>("listener")
-                    .map(|s| s.to_owned());
-                if let Some(t) = target {
-                    options.listener_opt = Some(ListenerOption {
-                        name: Some(t),
-                        proto: None,
-                        host: None,
-                        port: None,
-                    });
-                } else {
-                    options.listener_opt = Some(ListenerOption {
-                        name: None,
-                        proto: None,
-                        host: None,
-                        port: None,
-                    });
-                }
+                let target = match submatches.get_one::<String>("listener") {
+                    Some(l) => { Some(l.to_string()) },
+                    None => { None },
+                };
+
+                options.listener_opt = Some(ListenerOption {
+                    name: target,
+                    proto: None,
+                    host: None,
+                    port: None,
+                });
             }
             Some(("listeners", _)) => {
                 mode = Mode::ListListeners;
             }
-            // Payloads
-            Some(("payloads", _)) => {
-                mode = Mode::ListPayloads;
+            // Agents
+            Some(("agents", _)) => {
+                mode = Mode::ListAgents;
+            }
+            // Implants
+            Some(("generate", submatches)) => {
+                mode = Mode::GenerateImplant;
+                let name = match submatches.get_one::<String>("name") {
+                    Some(n) => { n.to_string() },
+                    None => { random_name("implant".to_string()) }
+                };
+                let listener_url = match submatches.get_one::<String>("listener") {
+                    Some(n) => { n.to_string() },
+                    None => { "http://127.0.0.1:8000/".to_string() }
+                };
+                let os = match submatches.get_one::<String>("os") {
+                    Some(n) => { n.to_string() },
+                    None => { "windows".to_string() }
+                };
+                let arch = match submatches.get_one::<String>("arch") {
+                    Some(n) => { n.to_string() },
+                    None => { "amd64".to_string() }
+                };
+                let format = match submatches.get_one::<String>("format") {
+                    Some(n) => { n.to_string() },
+                    None => { "exe".to_string() }
+                };
+
+                options.implant_opt = Some(ImplantOption {
+                    name,
+                    listener_url,
+                    os,
+                    arch,
+                    format,
+                });
+            }
+            Some(("implants", _)) => {
+                mode = Mode::ListImplants;
             }
             // Instructions
             Some(("download", _)) => {
-    
+                mode = Mode::Empty;
             }
             // Misc
             None => {
@@ -269,7 +317,7 @@ impl Client {
             },
         }
     
-        Ok(Some(Commands::new(mode, cmd, options)))
+        Ok(Some(Commands::new(mode, options)))
     }
     
     pub async fn run(&self) -> Result<()> {
@@ -382,12 +430,28 @@ impl Client {
                             Mode::ListListeners => {
                                 message = Message::Text("listeners".to_string());
                             }
-                            // Payloads
-                            Mode::GeneratePayload => {
-                                message = Message::Text("generate".to_string());
+                            // Agents
+                            Mode::ListAgents => {
+                                message = Message::Text("agents".to_string());
                             }
-                            Mode::ListPayloads => {
-                                message = Message::Text("payloads".to_string());
+                            // Implants
+                            Mode::GenerateImplant => {
+                                if let Some(implant_opt) = commands.options.implant_opt {
+                                    let name = implant_opt.name;
+                                    let listener_url = implant_opt.listener_url;
+                                    let os = implant_opt.os;
+                                    let arch = implant_opt.arch;
+                                    let format = implant_opt.format;
+                                    message = Message::Text(
+                                        format!("generate {} {} {} {} {}",
+                                            name, listener_url, os, arch, format));
+                                } else {
+                                    continue;
+                                }
+
+                            }
+                            Mode::ListImplants => {
+                                message = Message::Text("implants".to_string());
                             }
                             // Misc
                             Mode::Empty => {
