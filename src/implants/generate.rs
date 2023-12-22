@@ -1,4 +1,6 @@
 use log::info;
+use std::fs::File;
+use std::io::{BufReader, Bytes, Read};
 
 use crate::config::Config;
 
@@ -12,7 +14,7 @@ pub fn generate(
     os: String,
     arch: String,
     format: String
-) -> Result<String, std::io::Error> {
+) -> Result<(String, Vec<u8>), std::io::Error> {
 
     info!("Generating an implant...");
 
@@ -60,7 +62,10 @@ pub fn generate(
     ]);
 
     match cmd.status() {
-        Ok(_) => Ok(output),
+        Ok(_) => {
+            let buf = BufReader::new(File::open(output.to_owned()).unwrap());
+            Ok((output, buf.buffer().to_vec()))
+        },
         Err(e) => Err(e),
     }
 }

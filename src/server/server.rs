@@ -264,7 +264,8 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 i_arch.to_string(),
                                 i_format.to_string(),
                             ) {
-                                Ok(output) => {
+                                Ok((output, buffer)) => {
+                                    let _ = socket_lock.send(Message::Binary(buffer)).await;
                                     let _ = socket_lock.send(
                                         Message::Text(format!("Implant generated to `{output}`."))).await;
 
