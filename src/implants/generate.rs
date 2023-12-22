@@ -1,6 +1,7 @@
 use log::info;
 use std::fs::File;
 use std::io::{BufReader, Bytes, Read};
+use std::process::Command;
 
 use crate::config::Config;
 
@@ -21,17 +22,6 @@ pub fn generate(
     // Create `implants` directory
     config.mkdir("implants".to_string()).unwrap();
 
-    let opt_level = 3;
-    let host = "x86_64-unknown-linux-gnu";
-
-    let target = match (os.as_str(), arch.as_str()) {
-        ("linux",   "amd64")    => { "x86_64-unknown-linux-gnu"     },
-        ("windows", "amd64")    => { "x86_64-unknown-windows-gnu"   },
-        _ => {
-            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
-        },
-    };
-
     let ext = match format.as_str() {
         // "aspx" => ".aspx",
         // "docx" => ".docx",
@@ -42,30 +32,31 @@ pub fn generate(
         }
     };
 
-    let input = "implants/cpp/hello.cpp";
+    let input = "implants/cpp/messagebox.cpp";
     let output = format!("{}/server/implants/{}{}", config.app_dir.display(), name, ext);
 
-    let mut cc = cc::Build::new();
-    cc.debug(false);
-    cc.cpp(true);
-    // To show the list of target, run `rustc --print target-list`
-    cc.target(target);
-    cc.host(host);
-    cc.opt_level(opt_level);
-    // cc.include("implant/cpp/");
+    let (gcc, args) = match (os.as_str(), arch.as_str()) {
+        ("linux",   "amd64")    => { ("gcc", [&input, "-o", &output]) }
+        ("windows", "amd64")    => { ("/usr/bin/x86_64-w64-mingw32-gcc", [&input, "-o", &output]) }
+        ("windows", "i386")     => { ("/usr/bin/i686-w64-mingw32-gcc", [&input, "-o", &output]) }
+        _ => {
+            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
+        }
+    };
 
-    let mut cmd = cc.get_compiler().to_command();
-    cmd.args([
-        input,
-        "-o",
-        output.as_str(),
-    ]);
+    let result = Command::new(gcc)
+        .args(args)
+        .output();
 
-    match cmd.status() {
+    match result {
         Ok(_) => {
-            let buf = BufReader::new(File::open(output.to_owned()).unwrap());
-            Ok((output, buf.buffer().to_vec()))
-        },
-        Err(e) => Err(e),
+            let mut f = File::open(output.to_owned()).unwrap();
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer).unwrap();
+            Ok((output, buffer))
+        }
+        Err(e) => {
+            Err(e)
+        }
     }
 }

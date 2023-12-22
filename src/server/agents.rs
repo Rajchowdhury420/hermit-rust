@@ -16,9 +16,9 @@ pub struct Agent {
 }
 
 pub fn format_agents(agents: &Vec<Agent>) -> String  {
-    info!("Getting jobs status...");
+    info!("Getting agent status...");
     if agents.len() == 0 {
-        return String::from("No jobs found.");
+        return String::from("No agents found.");
     }
 
     let mut output = format!("{:>5} | {:<20} | {:<20} | {:<20}\n", "ID", "NAME", "HOSTNAME", "LISTENER");

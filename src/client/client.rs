@@ -3,6 +3,8 @@ use colored::Colorize;
 use futures_util::{SinkExt, StreamExt};
 use rustyline::{DefaultEditor, Result};
 use rustyline::error::ReadlineError;
+use std::fs;
+use std::io::Write;
 use std::process;
 use std::sync::{Arc, Mutex};
 use tokio_tungstenite::{
@@ -305,7 +307,7 @@ impl Client {
             None => {
                 mode = Mode::Empty;
             }
-            Some(("exit", _)) => {
+            Some(("exit", _)) | Some(("quit", _)) => {
                 mode = Mode::Exit;
             }
             _ => {
@@ -361,7 +363,10 @@ impl Client {
                     let _ = rl.add_history_entry(line.as_str());
                     let mut args = match shellwords::split(&line) {
                         Ok(args) => { args }
-                        Err(err) => { eprintln!("Can't parse command line: {err}"); vec!["".to_string()] }
+                        Err(err) => {
+                            eprintln!("Can't parse command line: {err}");
+                            vec!["".to_string()]
+                        }
                     };
                     args.insert(0, "client".into());
                     // Parse options
@@ -471,13 +476,36 @@ impl Client {
                     
                     // Receive responses
                     let mut receiver_lock = receiver.lock().unwrap();
+                    let mut recv_state = String::new();
+                    // let mut 
                     while let Some(Ok(msg)) = receiver_lock.next().await {
                         match msg {
                             Message::Text(text) => {
+                                if text == "done" {
+                                    break
+                                }
                                 println!("{text}");
+
+                                // Set state
+                                recv_state = text;
                             }
-                            Message::Binary(d) => {
-                                println!("Got {} bytes: {:?}", d.len(), d);
+                            Message::Binary(bytes) => {
+                                // Parse the state
+                                let args = match shellwords::split(&recv_state) {
+                                    Ok(args) => { args }
+                                    Err(err) => {
+                                        eprintln!("Can't parse command line: {err}");
+                                        vec!["".to_string()]
+                                    }
+                                };
+
+                                match args[0].as_str() {
+                                    "generated" => {
+                                        let outfile = args[1].to_string();
+                                        fs::write(outfile, &bytes).expect("Unable to write file");
+                                    }
+                                    _ => {}
+                                }
                             }
                             Message::Close(c) => {
                                 if let Some(cf) = c {
@@ -493,9 +521,8 @@ impl Client {
                             Message::Frame(_) => {
                                 unreachable!("This is never supposed to happen")
                             }
-                            _ => {}
+                            _ => { break }
                         }
-                        break
                     }
     
                 },

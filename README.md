@@ -19,7 +19,7 @@ It's prohibited to use on systems not under your control.
 Run the following command in the system which is going to run C2 server.
 
 ```sh
-sudo apt install -y git mingw-w64
+sudo apt install -y git build-essential mingw-w64
 ```
 
 <br />
