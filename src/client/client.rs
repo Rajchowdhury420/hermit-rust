@@ -150,9 +150,8 @@ impl Client {
                 .arg(Arg::new("listener")
                     .short('l')
                     .long("listener")
-                    .help("Listener URL that an agent connect to. e.g. 'http://10.1.2.3:3000/'")
-                    .default_value("http")
-                    .required(true)
+                    .help("Listener URL that an agent connect to")
+                    .default_value("http://127.0.0.1:8000/")
                     .value_parser(value_parser!(String))
                 )
                 .arg(Arg::new("os")
@@ -160,7 +159,6 @@ impl Client {
                     .long("os")
                     .help("Target OS")
                     .default_value("windows")
-                    .required(true)
                     .value_parser(value_parser!(String))
                 )
                 .arg(Arg::new("arch")
@@ -168,7 +166,6 @@ impl Client {
                     .long("arch")
                     .help("Target architecture")
                     .default_value("amd64")
-                    .required(true)
                     .value_parser(value_parser!(String))
                 )
                 .arg(Arg::new("format")
@@ -176,7 +173,6 @@ impl Client {
                     .long("format")
                     .help("File format to be generated")
                     .default_value("exe")
-                    .required(true)
                     .value_parser(value_parser!(String))
                 )
             )
@@ -442,6 +438,7 @@ impl Client {
                                     let os = implant_opt.os;
                                     let arch = implant_opt.arch;
                                     let format = implant_opt.format;
+
                                     message = Message::Text(
                                         format!("generate {} {} {} {} {}",
                                             name, listener_url, os, arch, format));

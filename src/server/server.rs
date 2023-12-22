@@ -19,10 +19,13 @@ use url::Url;
 
 use super::jobs::{check_dupl_job, find_job, format_jobs, Job, JobMessage};
 use super::agents::{Agent, format_agents};
+use crate::implants::generate::generate;
+use crate::config::Config;
 // use super::sessions::Session;
 
 #[derive(Debug)]
 pub struct Server {
+    pub config: Config,
     pub jobs: Arc<Mutex<Vec<Job>>>,
     tx_job: Arc<Mutex<broadcast::Sender<JobMessage>>>,
     pub agents: Arc<Mutex<Vec<Agent>>>,
@@ -31,8 +34,9 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(tx_job: broadcast::Sender<JobMessage>) -> Self {
+    pub fn new(config: Config, tx_job: broadcast::Sender<JobMessage>) -> Self {
         Self {
+            config,
             jobs: Arc::new(Mutex::new(Vec::new())),
             tx_job: Arc::new(Mutex::new(tx_job)),
             agents: Arc::new(Mutex::new(Vec::new())),
@@ -50,9 +54,9 @@ impl Server {
     }
 }
 
-pub async fn run() {
+pub async fn run(config: Config) {
     let (tx_job, _rx_job) = broadcast::channel(100);
-    let server = Arc::new(Mutex::new(Server::new(tx_job)));
+    let server = Arc::new(Mutex::new(Server::new(config, tx_job)));
 
     let app = Router::new()
         .route("/hermit", get(ws_handler))
@@ -251,11 +255,26 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                             let i_arch = args[4].to_string();
                             let i_format = args[5].to_string();
 
-                            let _ = socket_lock.send(
-                                Message::Text(format!(
-                                    "Generate an implant.\nname: {}\nlistener: {}\nos: {}\narch: {}\nformat: {}\n",
-                                    i_name, i_listener_url, i_os, i_arch, i_format
-                                ))).await;
+                            // Generate an implant
+                            match generate(
+                                &server_lock.config,
+                                i_name.to_string(),
+                                i_listener_url.to_string(),
+                                i_os.to_string(),
+                                i_arch.to_string(),
+                                i_format.to_string(),
+                            ) {
+                                Ok(output) => {
+                                    let _ = socket_lock.send(
+                                        Message::Text(format!("Implant generated to `{output}`."))).await;
+
+                                },
+                                Err(e) => {
+                                    let _ = socket_lock.send(
+                                        Message::Text(format!("Could not generate an imaplant: {e}"))
+                                    ).await;
+                                }
+                            }
 
                         } else if text.starts_with("implants") {
                             let _ = socket_lock.send(Message::Text("List implants.".to_string())).await;
