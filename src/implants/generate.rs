@@ -1,6 +1,6 @@
-use log::info;
+use log::{error, info};
 use std::fs::File;
-use std::io::{BufReader, Bytes, Read};
+use std::io::{Error, ErrorKind, Read};
 use std::process::Command;
 
 use crate::config::Config;
@@ -15,12 +15,9 @@ pub fn generate(
     os: String,
     arch: String,
     format: String
-) -> Result<(String, Vec<u8>), std::io::Error> {
+) -> Result<(String, Vec<u8>), Error> {
 
     info!("Generating an implant...");
-
-    // Create `implants` directory
-    config.mkdir("implants".to_string()).unwrap();
 
     let ext = match format.as_str() {
         // "aspx" => ".aspx",
@@ -32,31 +29,37 @@ pub fn generate(
         }
     };
 
-    let input = "implants/cpp/messagebox.cpp";
-    let output = format!("{}/server/implants/{}{}", config.app_dir.display(), name, ext);
+    let infile = "implants/cpp/messagebox.cpp";
+    let outfile = format!("{}/server/implants/{}{}", config.app_dir.display(), name, ext);
 
     let (gcc, args) = match (os.as_str(), arch.as_str()) {
-        ("linux",   "amd64")    => { ("gcc", [&input, "-o", &output]) }
-        ("windows", "amd64")    => { ("/usr/bin/x86_64-w64-mingw32-gcc", [&input, "-o", &output]) }
-        ("windows", "i386")     => { ("/usr/bin/i686-w64-mingw32-gcc", [&input, "-o", &output]) }
+        ("linux",   "amd64")    => { ("g++", [&infile, "-o", &outfile, ""]) }
+        ("windows", "amd64")    => { ("/usr/bin/x86_64-w64-mingw32-g++", [&infile, "-o", &outfile, "-lwinhttp"]) }
+        ("windows", "i386")     => { ("/usr/bin/i686-w64-mingw32-g++", [&infile, "-o", &outfile, "-lwinhttp"]) }
         _ => {
             return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
         }
     };
 
-    let result = Command::new(gcc)
+    let output = Command::new(gcc)
         .args(args)
         .output();
 
-    match result {
-        Ok(_) => {
-            let mut f = File::open(output.to_owned()).unwrap();
-            let mut buffer = Vec::new();
-            f.read_to_end(&mut buffer).unwrap();
-            Ok((output, buffer))
+    match output {
+        Ok(o) => {
+            info!("{:?}", o);
+            if o.status.success() {
+                let mut f = File::open(outfile.to_owned()).unwrap();
+                let mut buffer = Vec::new();
+                f.read_to_end(&mut buffer).unwrap();
+                return Ok((outfile, buffer));
+            } else {
+                return Err(Error::new(ErrorKind::Other, "Failed to generate an implant."));
+            }
         }
         Err(e) => {
-            Err(e)
+            error!("{e}");
+            return Err(e);
         }
     }
 }

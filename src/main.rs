@@ -59,6 +59,7 @@ async fn main() {
         Some(Commands::Client { host, port }) => {
             config.mkdir("client".to_string()).unwrap();
             config.mkdir("client/implants".to_string()).unwrap();
+            config.mkdir("client/tmp".to_string()).unwrap();
 
             println!("Starting C2 client...");
             let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
@@ -66,6 +67,7 @@ async fn main() {
         Some(Commands::Server {}) => {
             config.mkdir("server".to_string()).unwrap();
             config.mkdir("server/implants".to_string()).unwrap();
+            config.mkdir("server/tmp".to_string()).unwrap();
 
             info!("Starting C2 server...");
             let _ = run_server(config).await;

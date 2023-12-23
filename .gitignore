@@ -1,3 +1,6 @@
+.vscode
+
 /target
 
-.vscode
+# Implants project
+/implants/target

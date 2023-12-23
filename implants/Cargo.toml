@@ -1,0 +1,13 @@
+[package]
+name = "implants"
+version = "0.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.windows]
+version = "0.52"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+]
