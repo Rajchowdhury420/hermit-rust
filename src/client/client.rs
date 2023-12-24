@@ -3,8 +3,8 @@ use colored::Colorize;
 use futures_util::{SinkExt, StreamExt};
 use rustyline::{DefaultEditor, Result};
 use rustyline::error::ReadlineError;
+use spinners::{Spinner, Spinners};
 use std::fs;
-use std::io::Write;
 use std::process;
 use std::sync::{Arc, Mutex};
 use tokio_tungstenite::{
@@ -192,7 +192,7 @@ impl Client {
     
     fn parse_matches(&self, matches: &ArgMatches) -> clap::error::Result<Option<Commands>> {
         let mut mode = Mode::Empty;
-        let mut cmd = "".to_string();
+        // let mut cmd = "".to_string();
         let mut options = Options::new();
     
         match matches.subcommand() {
@@ -472,7 +472,15 @@ impl Client {
     
                     // Send command
                     // sender.send(Message::Text(line.to_owned())).await.expect("Can not send.");
-                    sender.send(message).await.expect("Can not send.");
+                    sender.send(message.to_owned()).await.expect("Can not send.");
+
+                    // Spinner while waiting for responses
+                    let mut spin: Option<Spinner> = None;
+                    if message.to_string().starts_with("generate") {
+                        spin = Some(Spinner::new(
+                            Spinners::Dots8,
+                            "Generating an implant...".into()));
+                    }
                     
                     // Receive responses
                     let mut receiver_lock = receiver.lock().unwrap();
@@ -525,6 +533,9 @@ impl Client {
                         }
                     }
     
+                    if let Some(mut spin) = spin {
+                        spin.stop();
+                    }
                 },
                 Err(ReadlineError::Interrupted) => {
                     break

@@ -14,7 +14,19 @@ It's prohibited to use on systems not under your control.
 
 ## Prerequisites
 
-### Linux
+### C2 Server
+
+```sh
+# For Linux agent
+rustup target add x86_64-unknown-linux-gnu
+rustup target add i686-unknown-linux-gnu
+
+# For Windows agent
+rustup target add x86_64-pc-windows-gnu
+rustup target add i686-pc-windows-gnu
+```
+
+- **Linux**
 
 Run the following command in the system which is going to run C2 server.
 

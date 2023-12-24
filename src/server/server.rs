@@ -278,9 +278,8 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 Ok((output, buffer)) => {
                                     let _ = socket_lock.send(
                                         Message::Text(format!(
-                                            "generated {}/client/implants/{}",
-                                            server_lock.config.app_dir.display(),
-                                            output.split("/").last().unwrap()
+                                            "generated {}",
+                                            output,
                                         ))).await;
                                     let _ = socket_lock.send(Message::Binary(buffer)).await;
                                     let _ = socket_lock.send(Message::Text("done".to_string())).await;

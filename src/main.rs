@@ -55,23 +55,24 @@ async fn main() {
 
     let cli = Cli::parse();
 
+    config.mkdir("implants".to_string()).unwrap();
+    config.mkdir("tmp".to_string()).unwrap();
+
     match &cli.command {
         Some(Commands::Client { host, port }) => {
             config.mkdir("client".to_string()).unwrap();
-            config.mkdir("client/implants".to_string()).unwrap();
-            config.mkdir("client/tmp".to_string()).unwrap();
 
             println!("Starting C2 client...");
             let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
         },
         Some(Commands::Server {}) => {
             config.mkdir("server".to_string()).unwrap();
-            config.mkdir("server/implants".to_string()).unwrap();
-            config.mkdir("server/tmp".to_string()).unwrap();
 
             info!("Starting C2 server...");
             let _ = run_server(config).await;
         },
-        _ => {},
+        _ => {
+            println!("Not enough argument. Run `hermit help` for the usage.")
+        },
     }
 }
