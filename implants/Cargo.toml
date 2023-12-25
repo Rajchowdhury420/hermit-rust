@@ -9,6 +9,9 @@ name = "implant"
 path = "src/main.rs"
 
 
+[dependencies]
+
+
 [dependencies.windows]
 version = "0.52"
 features = [

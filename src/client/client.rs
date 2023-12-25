@@ -94,7 +94,7 @@ impl Client {
                     Arg::new("host")
                         .short('H')
                         .long("host")
-                        .help(format!("Host [default: {}]", self.server_host))
+                        .help(format!("Host [default: {}]", self.server_host.to_string()))
                         .value_parser(value_parser!(String)),
                     Arg::new("port")
                         .short('P')
@@ -177,6 +177,13 @@ impl Client {
                     .default_value("exe")
                     .value_parser(value_parser!(String))
                 )
+                .arg(Arg::new("sleep")
+                    .short('s')
+                    .long("sleep")
+                    .help("Sleep time for each request to listener")
+                    .default_value("3")
+                    .value_parser(value_parser!(u64))
+                )
             )
             .subcommand(Command::new("implants")
                 .about("List implants generated.")
@@ -200,12 +207,12 @@ impl Client {
             Some(("add", submatches)) => {
                 mode = Mode::AddListener;
                 let name = match submatches.get_one::<String>("name") {
-                    Some(n) => { Some(n.to_string()) },
-                    None => { Some(random_name("listener".to_string())) }
+                    Some(n) => Some(n.to_string()),
+                    None => Some(random_name("listener".to_string())),
                 };
                 let host = match submatches.get_one::<String>("host") {
-                    Some(h) => { Some(h.to_string()) },
-                    None => { Some(self.server_host.to_string()) }
+                    Some(n) => Some(n.to_string()),
+                    None => Some("127.0.0.1".to_string())
                 };
                 let listener_option = ListenerOption {
                     name,
@@ -287,6 +294,10 @@ impl Client {
                     Some(n) => { n.to_string() },
                     None => { "exe".to_string() }
                 };
+                let sleep = match submatches.get_one::<u64>("sleep") {
+                    Some(n) => { *n },
+                    None => { 3 }
+                };
 
                 options.implant_opt = Some(ImplantOption {
                     name,
@@ -294,6 +305,7 @@ impl Client {
                     os,
                     arch,
                     format,
+                    sleep,
                 });
             }
             Some(("implants", _)) => {
@@ -443,10 +455,11 @@ impl Client {
                                     let os = implant_opt.os;
                                     let arch = implant_opt.arch;
                                     let format = implant_opt.format;
+                                    let sleep = implant_opt.sleep;
 
                                     message = Message::Text(
-                                        format!("generate {} {} {} {} {}",
-                                            name, listener_url, os, arch, format));
+                                        format!("generate {} {} {} {} {} {}",
+                                            name, listener_url, os, arch, format, sleep));
                                 } else {
                                     continue;
                                 }

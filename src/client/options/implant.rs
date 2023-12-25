@@ -5,4 +5,5 @@ pub struct ImplantOption {
     pub os: String,
     pub arch: String,
     pub format: String,
+    pub sleep: u64,
 }

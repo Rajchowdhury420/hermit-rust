@@ -37,6 +37,7 @@ pub async fn start_http_listener(
         .route("/", get(hello))
         .route("/reg", post(register))
         .with_state(server)
+        .route("/task", get(task))
         .route("/info", get(info))
         .layer((
             TraceLayer::new_for_http(),
@@ -57,7 +58,6 @@ pub async fn start_http_listener(
 
         let (socket, remote_addr) = tokio::select! {
             result = listener.accept() => {
-                info!("Accepted.");
                 result.unwrap()
             }
             _ = shutdown_signal(receiver_clone_1) => {
@@ -116,6 +116,7 @@ pub async fn start_http_listener(
 }
 
 async fn hello() -> &'static str {
+    info!("Agent requested `/`");
     "Hello, World!"
 }
 
@@ -123,6 +124,9 @@ async fn register(
     State(server): State<Arc<Mutex<Server>>>,
     Json(payload): Json<RegisterAgent>,
 ) -> (StatusCode, Json<Agent>) {
+
+    info!("Agent requested `/reg`");
+
     let agent = Agent {
         id: 0,
         name: random_name("agent".to_string()),
@@ -136,7 +140,13 @@ async fn register(
     (StatusCode::CREATED, Json(agent))
 }
 
+async fn task() -> String {
+    info!("Agent requested `/task`");
+    "Get tasks".to_string()
+}
+
 async fn info() -> String {
+    info!("Agent requested `/info`");
     "System information".to_string()
 }
 

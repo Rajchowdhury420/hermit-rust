@@ -16,7 +16,8 @@ pub fn generate(
     listener_url: String,
     os: String,
     arch: String,
-    format: String
+    format: String,
+    sleep: u16,
 ) -> Result<(String, Vec<u8>), Error> {
 
     info!("Generating an implant...");
@@ -30,6 +31,7 @@ pub fn generate(
     env::set_var("LPROTO", proto.to_string());
     env::set_var("LHOST", host.to_string());
     env::set_var("LPORT", port.to_string());
+    env::set_var("SLEEP", sleep.to_string());
     env::set_var("OUT_DIR", format!("implants/src"));
 
     let outdir = format!("{}/implants/{}", config.app_dir.display(), name.to_string());
@@ -107,7 +109,7 @@ pub fn generate(
 
     match output {
         Ok(o) => {
-            info!("{:?}", o);
+            info!("{:#?}", o);
             if o.status.success() {
                 let mut f = File::open(outfile.to_owned()).unwrap();
                 let mut buffer = Vec::new();
@@ -118,7 +120,7 @@ pub fn generate(
             }
         }
         Err(e) => {
-            error!("{e}");
+            error!("{:#?}", e);
             return Err(e);
         }
     }

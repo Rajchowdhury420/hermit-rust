@@ -265,6 +265,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                             let i_os = args[3].to_string();
                             let i_arch = args[4].to_string();
                             let i_format = args[5].to_string();
+                            let i_sleep: u16 = args[6].to_string().parse().unwrap();
 
                             // Generate an implant
                             match generate(
@@ -274,6 +275,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 i_os.to_string(),
                                 i_arch.to_string(),
                                 i_format.to_string(),
+                                i_sleep,
                             ) {
                                 Ok((output, buffer)) => {
                                     let _ = socket_lock.send(
