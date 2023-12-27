@@ -2,12 +2,14 @@ use clap::{Parser, Subcommand};
 use env_logger::Env;
 use log::{error, info, warn};
 
+pub mod banner;
 pub mod client;
 pub mod config;
 pub mod implants;
 pub mod server;
 pub mod utils;
 
+use crate::banner::banner;
 use crate::client::client::Client;
 use crate::config::Config;
 use crate::server::server::run as run_server;
@@ -62,13 +64,13 @@ async fn main() {
         Some(Commands::Client { host, port }) => {
             config.mkdir("client".to_string()).unwrap();
 
-            println!("Starting C2 client...");
+            banner("client");
             let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
         },
         Some(Commands::Server {}) => {
             config.mkdir("server".to_string()).unwrap();
 
-            info!("Starting C2 server...");
+            banner("server");
             let _ = run_server(config).await;
         },
         _ => {

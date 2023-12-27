@@ -1,6 +1,5 @@
 use axum::{
     extract::{Request, State},
-    Extension,
     http::StatusCode,
     Json,
     routing::{get, post},
@@ -9,7 +8,6 @@ use axum::{
 use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
 use log::info;
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, watch};
@@ -117,7 +115,7 @@ pub async fn start_http_listener(
 
 async fn hello() -> &'static str {
     info!("Agent requested `/`");
-    "Hello, World!"
+    "Hello world!"
 }
 
 async fn register(

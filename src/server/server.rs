@@ -112,197 +112,207 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                         let server_clone = Arc::clone(&server);
                         let server_lock = server_clone.lock().await;
 
-                        if text.starts_with("add") {
-                            let args = match shellwords::split(text.as_str()) {
-                                Ok(args) => { args }
-                                Err(err) => { error!("Can't parse command line: {err}"); vec!["".to_string()] }
-                            };
-                            let name = &args[1];
-                            let url = Url::parse(&args[2]).unwrap();
-                            
-                            let mut jobs = server_lock.jobs.lock().await;
-
-                            // Check if the url already exists.
-                            match check_dupl_job(&mut jobs, url.to_owned()) {
-                                Ok(_) => {},
-                                Err(e) => {
-                                    error!("{e}");
-                                    let _ = socket_lock.send(Message::Text(format!("Error: This URL already exists."))).await;
-                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
-                                    continue;
-                                },
+                        let args = match shellwords::split(text.as_str()) {
+                            Ok(args) => { args }
+                            Err(err) => {
+                                error!("Can't parse command line: {err}");
+                                // vec!["".to_string()]
+                                continue;
                             }
+                        };
 
-                            let next_id = jobs.len() as u32;
+                        match args[0].as_str() {
+                            "listener" => {
+                                match args[1].as_str() {
+                                    "add" => {
+                                        let name = &args[2];
+                                        let url = Url::parse(&args[3]).unwrap();
 
-                            let rx_job = server_lock.tx_job.lock().await;
+                                        let mut jobs = server_lock.jobs.lock().await;
 
-                            let new_job = Job::new(
-                                next_id,
-                                name.to_string(),
-                                url.scheme().to_owned(),
-                                url.host().unwrap().to_string(),
-                                url.port().unwrap(),
-                                Arc::new(Mutex::new(rx_job.subscribe())),
-                                Arc::clone(&server_clone),
-                            );
+                                        // Check if the url already exists.
+                                        match check_dupl_job(&mut jobs, url.to_owned()) {
+                                            Ok(_) => {},
+                                            Err(e) => {
+                                                error!("{e}");
+                                                let _ = socket_lock.send(Message::Text(format!("Error: This URL already exists."))).await;
+                                                let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                                continue;
+                                            },
+                                        }
 
-                            jobs.push(new_job);
-                            let _ = socket_lock.send(Message::Text(format!("Listener `{url}` added."))).await;
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                        let next_id = jobs.len() as u32;
 
-                        } else if text.starts_with("delete") {
-                            let args = match shellwords::split(text.as_str()) {
-                                Ok(args) => { args }
-                                Err(err) => {
-                                    error!("Could not delete listener: {err}");
-                                    vec!["".to_string()]
-                                }
-                            };
-                            let target = args[1].to_string();
+                                        let rx_job = server_lock.tx_job.lock().await;
 
-                            let mut jobs = server_lock.jobs.lock().await;
-                            let mut jobs_owned = jobs.to_owned();
+                                        let new_job = Job::new(
+                                            next_id,
+                                            name.to_string(),
+                                            url.scheme().to_owned(),
+                                            url.host().unwrap().to_string(),
+                                            url.port().unwrap(),
+                                            Arc::new(Mutex::new(rx_job.subscribe())),
+                                            Arc::clone(&server_clone),
+                                        );
 
-                            let job = match find_job(&mut jobs_owned, target.to_string()).await {
-                                Some(j) => j,
-                                None => {
-                                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
-                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
-                                    continue;
-                                }
-                            };
+                                        jobs.push(new_job);
+                                        let _ = socket_lock.send(Message::Text(format!("Listener `{url}` added."))).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    "delete" => {
+                                        let target = args[2].to_string();
+            
+                                        let mut jobs = server_lock.jobs.lock().await;
+                                        let mut jobs_owned = jobs.to_owned();
+            
+                                        let job = match find_job(&mut jobs_owned, target.to_string()).await {
+                                            Some(j) => j,
+                                            None => {
+                                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                                let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                                continue;
+                                            }
+                                        };
+            
+                                        if !job.running {
+                                            job.handle.lock().await.abort();
+                                            jobs.remove(job.id as usize);
+                                            let _ = socket_lock.send(Message::Text(format!("Listener `{target}` deleted."))).await;
+                                        } else {
+                                            let _ = socket_lock.send(
+                                                Message::Text(format!("Listener `{target}` cannot be deleted because it's running. Please stop it before deleting."))
+                                            ).await;
+                                        }
+            
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    "start" => {
+                                        let target = args[2].to_string();
+            
+                                        let mut jobs = server_lock.jobs.lock().await;
+                                        let job = match find_job(&mut jobs, target.to_string()).await {
+                                            Some(j) => j,
+                                            None => {
+                                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                                let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                                continue;
+                                            }
+                                        };
+            
+                                        if !job.running {
+                                            let _ = server_lock.tx_job.lock().await.send(JobMessage::Start(job.id));
+                                            job.running = true;
+                                            let _ = socket_lock.send(Message::Text(format!("Listener `{target}` started."))).await;
+                                        } else {
+                                            let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is alread running"))).await;
+                                        }
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    "stop" => {
+                                        let target = args[2].to_string();
 
-                            if !job.running {
-                                job.handle.lock().await.abort();
-                                jobs.remove(job.id as usize);
-                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` deleted."))).await;
-                            } else {
-                                let _ = socket_lock.send(
-                                    Message::Text(format!("Listener `{target}` cannot be deleted because it's running. Please stop it before deleting."))
-                                ).await;
-                            }
+                                        let mut jobs = server_lock.jobs.lock().await;
+                                        let job = match find_job(&mut jobs, target.to_string()).await {
+                                            Some(j) => j,
+                                            None => {
+                                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
+                                                let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                                continue;
+                                            }
+                                        };
 
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                        } else if text.starts_with("start") {
-                            let args = match shellwords::split(text.as_str()) {
-                                Ok(args) => { args }
-                                Err(err) => { error!("Could not start listener: {err}"); vec!["".to_string()] }
-                            };
-                            let target = args[1].to_string();
-
-                            let mut jobs = server_lock.jobs.lock().await;
-                            let job = match find_job(&mut jobs, target.to_string()).await {
-                                Some(j) => j,
-                                None => {
-                                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
-                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
-                                    continue;
-                                }
-                            };
-
-                            if !job.running {
-                                let _ = server_lock.tx_job.lock().await.send(JobMessage::Start(job.id));
-                                job.running = true;
-                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` started."))).await;
-                            } else {
-                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is alread running"))).await;
-                            }
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                        } else if text.starts_with("stop") {
-                            let args = match shellwords::split(text.as_str()) {
-                                Ok(args) => { args }
-                                Err(err) => {
-                                    error!("Could not stop listener: {err}");
-                                    vec!["".to_string()]
-                                }
-                            };
-                            let target = args[1].to_string();
-
-                            let mut jobs = server_lock.jobs.lock().await;
-                            let job = match find_job(&mut jobs, target.to_string()).await {
-                                Some(j) => j,
-                                None => {
-                                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
-                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
-                                    continue;
-                                }
-                            };
-
-                            if job.running {
-                                let _ = server_lock.tx_job.lock().await.send(JobMessage::Stop(job.id));
-                                job.running = false;
-                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` stopped."))).await;
-                            } else {
-                                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is already stopped."))).await;
-                            }
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                        } else if text.starts_with("listeners") {
-                            let mut jobs = server_lock.jobs.lock().await;
-                            let output = format_jobs(&mut jobs);
-                            let _ = socket_lock.send(Message::Text(output)).await;
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                        } else if text.starts_with("agents") {
-                            let mut agents = server_lock.agents.lock().await;
-                            let output = format_agents(&mut agents);
-                            let _ = socket_lock.send(Message::Text(output)).await;
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                        } else if text.starts_with("generate") {
-                            let args = match shellwords::split(text.as_str()) {
-                                Ok(args) => { args }
-                                Err(err) => {
-                                    error!("Could not parse arguments: {err}");
-                                    vec!["".to_string()]
-                                }
-                            };
-                            let i_name = args[1].to_string();
-                            let i_listener_url = args[2].to_string();
-                            let i_os = args[3].to_string();
-                            let i_arch = args[4].to_string();
-                            let i_format = args[5].to_string();
-                            let i_sleep: u16 = args[6].to_string().parse().unwrap();
-
-                            // Generate an implant
-                            match generate(
-                                &server_lock.config,
-                                i_name.to_string(),
-                                i_listener_url.to_string(),
-                                i_os.to_string(),
-                                i_arch.to_string(),
-                                i_format.to_string(),
-                                i_sleep,
-                            ) {
-                                Ok((output, buffer)) => {
-                                    let _ = socket_lock.send(
-                                        Message::Text(format!(
-                                            "generated {}",
-                                            output,
-                                        ))).await;
-                                    let _ = socket_lock.send(Message::Binary(buffer)).await;
-                                    let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                                },
-                                Err(e) => {
-                                    let _ = socket_lock.send(
-                                        Message::Text(format!("Could not generate an imaplant: {e}"))
-                                    ).await;
-                                    let _ = socket_lock.send(
-                                        Message::Text("done".to_string())).await;
+                                        if job.running {
+                                            let _ = server_lock.tx_job.lock().await.send(JobMessage::Stop(job.id));
+                                            job.running = false;
+                                            let _ = socket_lock.send(Message::Text(format!("Listener `{target}` stopped."))).await;
+                                        } else {
+                                            let _ = socket_lock.send(Message::Text(format!("Listener `{target}` is already stopped."))).await;
+                                        }
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    "list" => {
+                                        let mut jobs = server_lock.jobs.lock().await;
+                                        let output = format_jobs(&mut jobs);
+                                        let _ = socket_lock.send(Message::Text(output)).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    _ => {
+                                        let _ = socket_lock.send(Message::Text("Unknown arguments".to_string())).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                        continue;
+                                    }
                                 }
                             }
+                            "agent" => {
+                                match args[1].as_str() {
+                                    "list" => {
+                                        let mut agents = server_lock.agents.lock().await;
+                                        let output = format_agents(&mut agents);
+                                        let _ = socket_lock.send(Message::Text(output)).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    _ => {
+                                        let _ = socket_lock.send(Message::Text("Unknown arguments".to_string())).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                }
+                            }
+                            "implant" => {
+                                match args[1].as_str() {
+                                    "gen" => {
+                                        let i_name = args[2].to_string();
+                                        let i_listener_url = args[3].to_string();
+                                        let i_os = args[4].to_string();
+                                        let i_arch = args[5].to_string();
+                                        let i_format = args[6].to_string();
+                                        let i_sleep: u16 = args[7].to_string().parse().unwrap();
+            
+                                        // Generate an implant
+                                        match generate(
+                                            &server_lock.config,
+                                            i_name.to_string(),
+                                            i_listener_url.to_string(),
+                                            i_os.to_string(),
+                                            i_arch.to_string(),
+                                            i_format.to_string(),
+                                            i_sleep,
+                                        ) {
+                                            Ok((output, buffer)) => {
+                                                let _ = socket_lock.send(
+                                                    Message::Text(format!(
+                                                        "Implant generated {}",
+                                                        output,
+                                                    ))).await;
+                                                let _ = socket_lock.send(Message::Binary(buffer)).await;
+                                                let _ = socket_lock.send(Message::Text("done".to_string())).await;
+            
+                                            },
+                                            Err(e) => {
+                                                let _ = socket_lock.send(
+                                                    Message::Text(format!("Could not generate an imaplant: {e}"))
+                                                ).await;
+                                                let _ = socket_lock.send(
+                                                    Message::Text("done".to_string())).await;
+                                            }
+                                        }
+                                    }
+                                    "download" => {
+                                        let _ = socket_lock.send(Message::Text("Download an implant.".to_string())).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    "list" => {
+                                        let _ = socket_lock.send(Message::Text("List implants.".to_string())).await;
+                                        let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                    _ => {
 
-                        } else if text.starts_with("implants") {
-                            let _ = socket_lock.send(Message::Text("List implants.".to_string())).await;
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
-
-                        } else {
-                            let _ = socket_lock.send(Message::Text(format!("Unknown command: {text}"))).await;
-                            let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                                    }
+                                }
+                            }
+                            _ => {
+                                let _ = socket_lock.send(Message::Text(format!("Unknown command: {text}"))).await;
+                                let _ = socket_lock.send(Message::Text("done".to_string())).await;
+                            }
                         }
                     }
                     _ => {}

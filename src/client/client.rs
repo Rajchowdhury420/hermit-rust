@@ -13,17 +13,19 @@ use tokio_tungstenite::{
 };
 
 use super::options::{
+    agent::AgentOption,
     implant::ImplantOption,
     listener::ListenerOption,
     options::Options
 };
+use super::prompt::set_prompt;
 use crate::utils::random::random_name;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_FAILURE: i32 = 0;
 
 #[derive(Debug)]
-pub enum Mode {
+pub enum Operation {
     Empty,
     Exit,
     Unknown,
@@ -36,26 +38,28 @@ pub enum Mode {
     ListListeners,
 
     // Agents
+    UseAgent,
     ListAgents,
     
     // Implants
     GenerateImplant,
+    DownloadImplant,
     ListImplants,
 
-    Instruction,
+    // Instruction,
 }
 
 #[derive(Debug)]
 struct Commands {
-    pub mode: Mode,
+    pub op: Operation,
     pub options: Options
     // pub cmd: String,
 }
 
 impl Commands {
-    fn new(mode: Mode, options: Options) -> Self {
+    fn new(op: Operation, options: Options) -> Self {
         Self {
-            mode,
+            op,
             options,
             // cmd,
         }
@@ -65,6 +69,8 @@ impl Commands {
 pub struct Client {
     server_host: String,
     server_port: u16,
+
+    mode: String,
 }
 
 impl Client {
@@ -72,6 +78,7 @@ impl Client {
         Self {
             server_host,
             server_port,
+            mode: String::new(),
         }
     }
 
@@ -84,105 +91,131 @@ impl Client {
                 .about("Close the connection and exit.")
             )
             // Listeners
-            .subcommand(Command::new("add")
-                .about("Add a new listener.")
-                .args([
-                    Arg::new("protocol")
-                        .help("Protocol")
-                        .default_value("http")
-                        .value_parser(value_parser!(String)),
-                    Arg::new("host")
-                        .short('H')
-                        .long("host")
-                        .help(format!("Host [default: {}]", self.server_host.to_string()))
-                        .value_parser(value_parser!(String)),
-                    Arg::new("port")
-                        .short('P')
-                        .long("port")
-                        .help("Port")
+            .subcommand(Command::new("listener")
+                .about("Manage listeners.")
+                .subcommand(Command::new("add")
+                    .about("Add a new listener.")
+                    .args([
+                        Arg::new("protocol")
+                            .help("Protocol")
+                            .default_value("http")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("host")
+                            .short('H')
+                            .long("host")
+                            .help(format!("Host [default: {}]", self.server_host.to_string()))
+                            .value_parser(value_parser!(String)),
+                        Arg::new("port")
+                            .short('P')
+                            .long("port")
+                            .help("Port")
+                            .required(true)
+                            .value_parser(value_parser!(u16)),
+                        Arg::new("name")
+                            .short('n')
+                            .long("name")
+                            .help("Specify the name of a listener")
+                            .value_parser(value_parser!(String)),
+                    ])
+                )
+                .subcommand(Command::new("delete")
+                    .about("Delete a listener.")
+                    .arg(Arg::new("listener")
+                        .help("Listener ID or name to delete")
                         .required(true)
-                        .value_parser(value_parser!(u16)),
-                    Arg::new("name")
-                        .short('n')
-                        .long("name")
-                        .help("Specify the name of a listener")
-                        .value_parser(value_parser!(String)),
-                ])
-            )
-            .subcommand(Command::new("delete")
-                .about("Delete a listener.")
-                .arg(Arg::new("listener")
-                    .help("Listener ID or name to delete")
-                    .required(true)
-                    .value_parser(value_parser!(String))
+                        .value_parser(value_parser!(String))
+                    )                    
                 )
-            )
-            .subcommand(Command::new("start")
-                .about("Start a listener.")
-                .arg(Arg::new("listener")
-                    .help("Listener ID or name to start")
-                    .required(true)
-                    .value_parser(value_parser!(String))
+                .subcommand(Command::new("start")
+                    .about("Start a listener.")
+                    .arg(Arg::new("listener")
+                        .help("Listener ID or name to start")
+                        .required(true)
+                        .value_parser(value_parser!(String))
+                    )
                 )
-            )
-            .subcommand(Command::new("stop")
-                .about("Stop a listener.")
-                .arg(Arg::new("listener")
-                    .help("Listener ID or name to stop")
-                    .required(true)
-                    .value_parser(value_parser!(String))
+                .subcommand(Command::new("stop")
+                    .about("Stop a listener.")
+                    .arg(Arg::new("listener")
+                        .help("Listener ID or name to stop")
+                        .required(true)
+                        .value_parser(value_parser!(String))
+                    )
+                )
+                .subcommand(Command::new("list")
+                    .about("List listeners.")
                 )
             )
             .subcommand(Command::new("listeners")
                 .about("List listeners.")
             )
             // Agents
+            .subcommand(Command::new("agent")
+                .about("Manage agents.")
+                .subcommand(Command::new("use")
+                    .about("Switch to specified agent shell.")
+                    .arg(Arg::new("name")
+                        .help("Agent ID or name")
+                        .required(true)
+                        .value_parser(value_parser!(String)))
+                )
+                .subcommand(Command::new("list")
+                    .about("List agents.")
+                )
+            )
             .subcommand(Command::new("agents")
-                .about("List agents who are connected to listeners.")
+                .about("List agents.")
             )
             // Implants
-            .subcommand(Command::new("generate")
-                .about("Generate an implant.")
-                .arg(Arg::new("name")
-                    .short('n')
-                    .long("name")
-                    .help("Set an implant name")
-                    .value_parser(value_parser!(String))
+            .subcommand(Command::new("implant")
+                .about("Manage implants.")
+                .subcommand(Command::new("gen")
+                    .about("Generate a new implant.")
+                    .args([
+                        Arg::new("name")
+                            .short('n')
+                            .long("name")
+                            .help("Set an implant name")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("listener")
+                            .short('l')
+                            .long("listener")
+                            .help("Listener URL that an agent connect to")
+                            .default_value("http://127.0.0.1:8000/")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("os")
+                            .short('o')
+                            .long("os")
+                            .help("Target OS")
+                            .default_value("windows")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("arch")
+                            .short('a')
+                            .long("arch")
+                            .help("Target architecture")
+                            .default_value("amd64")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("format")
+                            .short('f')
+                            .long("format")
+                            .help("File format to be generated")
+                            .default_value("exe")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("sleep")
+                            .short('s')
+                            .long("sleep")
+                            .help("Sleep time for each request to listener")
+                            .default_value("3")
+                            .value_parser(value_parser!(u64)),
+                    ])
                 )
-                .arg(Arg::new("listener")
-                    .short('l')
-                    .long("listener")
-                    .help("Listener URL that an agent connect to")
-                    .default_value("http://127.0.0.1:8000/")
-                    .value_parser(value_parser!(String))
+                .subcommand(Command::new("download")
+                    .about("Download specified implant.")
+                    .arg(Arg::new("implant")
+                        .help("Implant ID or name."))
                 )
-                .arg(Arg::new("os")
-                    .short('o')
-                    .long("os")
-                    .help("Target OS")
-                    .default_value("windows")
-                    .value_parser(value_parser!(String))
-                )
-                .arg(Arg::new("arch")
-                    .short('a')
-                    .long("arch")
-                    .help("Target architecture")
-                    .default_value("amd64")
-                    .value_parser(value_parser!(String))
-                )
-                .arg(Arg::new("format")
-                    .short('f')
-                    .long("format")
-                    .help("File format to be generated")
-                    .default_value("exe")
-                    .value_parser(value_parser!(String))
-                )
-                .arg(Arg::new("sleep")
-                    .short('s')
-                    .long("sleep")
-                    .help("Sleep time for each request to listener")
-                    .default_value("3")
-                    .value_parser(value_parser!(u64))
+                .subcommand(Command::new("list")
+                    .about("List implants generated.")
                 )
             )
             .subcommand(Command::new("implants")
@@ -198,136 +231,176 @@ impl Client {
     }
     
     fn parse_matches(&self, matches: &ArgMatches) -> clap::error::Result<Option<Commands>> {
-        let mut mode = Mode::Empty;
+        let mut op = Operation::Empty;
         // let mut cmd = "".to_string();
         let mut options = Options::new();
     
         match matches.subcommand() {
-            // Listeners
-            Some(("add", submatches)) => {
-                mode = Mode::AddListener;
-                let name = match submatches.get_one::<String>("name") {
-                    Some(n) => Some(n.to_string()),
-                    None => Some(random_name("listener".to_string())),
-                };
-                let host = match submatches.get_one::<String>("host") {
-                    Some(n) => Some(n.to_string()),
-                    None => Some("127.0.0.1".to_string())
-                };
-                let listener_option = ListenerOption {
-                    name,
-                    proto: submatches.get_one::<String>("protocol").cloned(),
-                    host,
-                    port: submatches.get_one::<u16>("port").cloned(),
-                };
-                options.listener_opt = Some(listener_option);
-            }
-            Some(("delete", submatches)) => {
-                mode = Mode::DeleteListener;
-                let target = match submatches.get_one::<String>("listener") {
-                    Some(l) => { Some(l.to_string()) },
-                    None => { None },
-                };
+            // Listener
+            Some(("listener", subm)) => {
+                match subm.subcommand() {
+                    Some(("add", subm2)) => {
+                        op = Operation::AddListener;
+                        let name = match subm2.get_one::<String>("name") {
+                            Some(n) => Some(n.to_string()),
+                            None => Some(random_name("listener".to_string())),
+                        };
+                        let host = match subm2.get_one::<String>("host") {
+                            Some(h) => Some(h.to_string()),
+                            None => Some("127.0.0.1".to_string())
+                        };
+                        let listener_option = ListenerOption {
+                            name,
+                            proto: subm2.get_one::<String>("protocol").cloned(),
+                            host,
+                            port: subm2.get_one::<u16>("port").cloned(),
+                        };
+                        options.listener_opt = Some(listener_option);
+                    }
+                    Some(("delete", subm2)) => {
+                        op = Operation::DeleteListener;
+                        let target = match subm2.get_one::<String>("listener") {
+                            Some(l) => { Some(l.to_string()) },
+                            None => { None },
+                        };
 
-                options.listener_opt = Some(ListenerOption {
-                    name: target,
-                    proto: None,
-                    host: None,
-                    port: None,
-                });
-            }
-            Some(("start", submatches)) => {
-                mode = Mode::StartListener;
-                let target = match submatches.get_one::<String>("listener") {
-                    Some(l) => { Some(l.to_string()) },
-                    None => { None },
-                };
+                        options.listener_opt = Some(ListenerOption {
+                            name: target,
+                            proto: None,
+                            host: None,
+                            port: None,
+                        });
+                    }
+                    Some(("start", subm2)) => {
+                        op = Operation::StartListener;
+                        let target = match subm2.get_one::<String>("listener") {
+                            Some(l) => { Some(l.to_string()) },
+                            None => { None },
+                        };
 
-                options.listener_opt = Some(ListenerOption {
-                    name: target,
-                    proto: None,
-                    host: None,
-                    port: None,
-                });
-            }
-            Some(("stop", submatches)) => {
-                mode = Mode::StopListener;
-                let target = match submatches.get_one::<String>("listener") {
-                    Some(l) => { Some(l.to_string()) },
-                    None => { None },
-                };
+                        options.listener_opt = Some(ListenerOption {
+                            name: target,
+                            proto: None,
+                            host: None,
+                            port: None,
+                        });
+                    }
+                    Some(("stop", subm2)) => {
+                        op = Operation::StopListener;
+                        let target = match subm2.get_one::<String>("listener") {
+                            Some(l) => { Some(l.to_string()) },
+                            None => { None },
+                        };
 
-                options.listener_opt = Some(ListenerOption {
-                    name: target,
-                    proto: None,
-                    host: None,
-                    port: None,
-                });
+                        options.listener_opt = Some(ListenerOption {
+                            name: target,
+                            proto: None,
+                            host: None,
+                            port: None,
+                        });
+                    }
+                    Some(("list", _)) => {
+                        op = Operation::ListListeners;
+                    }
+                    _ => {
+                        op = Operation::Unknown;
+                    }
+                }
             }
             Some(("listeners", _)) => {
-                mode = Mode::ListListeners;
+                op = Operation::ListListeners;
             }
-            // Agents
-            Some(("agents", _)) => {
-                mode = Mode::ListAgents;
-            }
-            // Implants
-            Some(("generate", submatches)) => {
-                mode = Mode::GenerateImplant;
-                let name = match submatches.get_one::<String>("name") {
-                    Some(n) => { n.to_string() },
-                    None => { random_name("implant".to_string()) }
-                };
-                let listener_url = match submatches.get_one::<String>("listener") {
-                    Some(n) => { n.to_string() },
-                    None => { "http://127.0.0.1:8000/".to_string() }
-                };
-                let os = match submatches.get_one::<String>("os") {
-                    Some(n) => { n.to_string() },
-                    None => { "windows".to_string() }
-                };
-                let arch = match submatches.get_one::<String>("arch") {
-                    Some(n) => { n.to_string() },
-                    None => { "amd64".to_string() }
-                };
-                let format = match submatches.get_one::<String>("format") {
-                    Some(n) => { n.to_string() },
-                    None => { "exe".to_string() }
-                };
-                let sleep = match submatches.get_one::<u64>("sleep") {
-                    Some(n) => { *n },
-                    None => { 3 }
-                };
+            // Agent
+            Some(("agent", subm)) => {
+                match subm.subcommand() {
+                    Some(("use", subm2)) => {
+                        op = Operation::UseAgent;
+                        let name = match subm2.get_one::<String>("name") {
+                            Some(n) => { n.to_string() },
+                            None => { "0".to_string() },
+                        };
 
-                options.implant_opt = Some(ImplantOption {
-                    name,
-                    listener_url,
-                    os,
-                    arch,
-                    format,
-                    sleep,
-                });
+                        options.agent_opt = Some(AgentOption {
+                            name,
+                        });
+                    }
+                    Some(("list", _)) => {
+                        op = Operation::ListAgents;
+                    }
+                    _ => {
+                        op = Operation::Unknown;
+                    }
+                }
+            }
+            Some(("agents", _)) => {
+                op = Operation::ListAgents;
+            }
+            // Implant
+            Some(("implant", subm)) => {
+                match subm.subcommand() {
+                    Some(("gen", subm2)) => {
+                        op = Operation::GenerateImplant;
+                        let name = match subm2.get_one::<String>("name") {
+                            Some(n) => { n.to_string() },
+                            None => { random_name("implant".to_string()) }
+                        };
+                        let listener_url = match subm2.get_one::<String>("listener") {
+                            Some(n) => { n.to_string() },
+                            None => { "http://127.0.0.1:8000/".to_string() }
+                        };
+                        let os = match subm2.get_one::<String>("os") {
+                            Some(n) => { n.to_string() },
+                            None => { "windows".to_string() }
+                        };
+                        let arch = match subm2.get_one::<String>("arch") {
+                            Some(n) => { n.to_string() },
+                            None => { "amd64".to_string() }
+                        };
+                        let format = match subm2.get_one::<String>("format") {
+                            Some(n) => { n.to_string() },
+                            None => { "exe".to_string() }
+                        };
+                        let sleep = match subm2.get_one::<u64>("sleep") {
+                            Some(n) => { *n },
+                            None => { 3 }
+                        };
+
+                        options.implant_opt = Some(ImplantOption {
+                            name,
+                            listener_url,
+                            os,
+                            arch,
+                            format,
+                            sleep,
+                        });
+                    }
+                    Some(("download", subm2)) => {
+                        op = Operation::DownloadImplant;
+                    }
+                    Some(("list", _)) => {
+                        op = Operation::ListImplants;
+                    }
+                    _ => {
+                        op = Operation::Unknown;
+                    }
+                }
             }
             Some(("implants", _)) => {
-                mode = Mode::ListImplants;
-            }
-            // Instructions
-            Some(("download", _)) => {
-                mode = Mode::Empty;
+                op = Operation::ListImplants;
             }
             // Misc
             None => {
-                mode = Mode::Empty;
+                op = Operation::Empty;
             }
             Some(("exit", _)) | Some(("quit", _)) => {
-                mode = Mode::Exit;
+                op = Operation::Exit;
             }
             _ => {
-                mode = Mode::Unknown;
+                op = Operation::Unknown;
             },
         }
     
-        Ok(Some(Commands::new(mode, options)))
+        Ok(Some(Commands::new(op, options)))
     }
     
     pub async fn run(&self) -> Result<()> {
@@ -339,24 +412,20 @@ impl Client {
     
         let ws_stream = match connect_async(server_url.to_string()).await {
             Ok((stream, _response)) => {
-                println!("{}", "[+] Handshake has been completed.".green().bold());
-                // println!("[+] Server response: {response:?}");
+                println!("{} Handshake has been completed.", "[+]".green().bold());
                 stream
             }
             Err(e) => {
-                println!("{} {}", "[x] WebSocket handshake failed:".red().bold(), e.to_string().red().bold());
+                println!("{} WebSocket handshake failed: {}", "[x]".red().bold(), e.to_string());
                 return Ok(());
             }
         };
     
         println!(
-            "{}",
-            format!(
-                "[+] Connected to C2 server ({}) successfully.",
-                server_url.to_string().cyan().bold()
-            ).green().bold());
+            "{} Connected to C2 server ({}) successfully.",
+            "[+]".green().bold(), server_url.to_string());
     
-        let (mut sender, mut receiver) = ws_stream.split();
+        let (mut sender, receiver) = ws_stream.split();
     
         // Client commands
         let mut rl = DefaultEditor::new()?;
@@ -368,7 +437,8 @@ impl Client {
         let receiver = Arc::new(Mutex::new(receiver));
     
         loop {
-            let readline = rl.readline(Self::set_prompt().as_str());
+            let readline = rl.readline(
+                set_prompt(self.mode.to_string()).as_str());
             match readline {
                 Ok(line) => {
                     // Handle input
@@ -393,11 +463,11 @@ impl Client {
                     let mut message = Message::Text("".to_owned());
     
                     if let Some(commands) = commands {
-                        match &commands.mode {
-                            // Listeners
-                            Mode::AddListener => {
+                        match &commands.op {
+                            // Listener
+                            Operation::AddListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
-                                    message = Message::Text(format!("add {} {}://{}:{}/",
+                                    message = Message::Text(format!("listener add {} {}://{}:{}/",
                                         listener_opt.name.unwrap(),
                                         listener_opt.proto.unwrap(),
                                         listener_opt.host.unwrap(),
@@ -407,10 +477,10 @@ impl Client {
                                     continue;
                                 }
                             }
-                            Mode::DeleteListener => {
+                            Operation::DeleteListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("delete {}", name));
+                                        message = Message::Text(format!("listener delete {}", name));
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                     }
@@ -418,10 +488,10 @@ impl Client {
                                     continue;
                                 }
                             }
-                            Mode::StartListener => {
+                            Operation::StartListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("start {}", name));
+                                        message = Message::Text(format!("listener start {}", name));
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                     }
@@ -429,26 +499,33 @@ impl Client {
                                     continue;
                                 }
                             }
-                            Mode::StopListener => {
+                            Operation::StopListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("stop {}", name));
+                                        message = Message::Text(format!("listener stop {}", name));
                                     } else {
                                         println!("Specify target listener by ID or name.");
+                                        continue;
                                     }
                                 } else {
                                     continue;
                                 }
                             }
-                            Mode::ListListeners => {
-                                message = Message::Text("listeners".to_string());
+                            Operation::ListListeners => {
+                                message = Message::Text("listener list".to_string());
                             }
-                            // Agents
-                            Mode::ListAgents => {
-                                message = Message::Text("agents".to_string());
+                            // Agent
+                            Operation::UseAgent => {
+                                if let Some(agent_opt) = commands.options.agent_opt {
+                                    let name = agent_opt.name;
+                                }
+                                continue;
                             }
-                            // Implants
-                            Mode::GenerateImplant => {
+                            Operation::ListAgents => {
+                                message = Message::Text("agent list".to_string());
+                            }
+                            // Implant
+                            Operation::GenerateImplant => {
                                 if let Some(implant_opt) = commands.options.implant_opt {
                                     let name = implant_opt.name;
                                     let listener_url = implant_opt.listener_url;
@@ -458,25 +535,29 @@ impl Client {
                                     let sleep = implant_opt.sleep;
 
                                     message = Message::Text(
-                                        format!("generate {} {} {} {} {} {}",
+                                        format!("implant gen {} {} {} {} {} {}",
                                             name, listener_url, os, arch, format, sleep));
                                 } else {
                                     continue;
                                 }
 
                             }
-                            Mode::ListImplants => {
-                                message = Message::Text("implants".to_string());
-                            }
-                            // Misc
-                            Mode::Empty => {
+                            Operation::DownloadImplant => {
+                                println!("Download an implant.");
                                 continue;
                             }
-                            Mode::Exit => {
+                            Operation::ListImplants => {
+                                message = Message::Text("implant list".to_string());
+                            }
+                            // Misc
+                            Operation::Empty => {
+                                continue;
+                            }
+                            Operation::Exit => {
                                 // message = Message::Close(None);
                                 process::exit(EXIT_SUCCESS);
                             }
-                            _ => {
+                            Operation::Unknown => {
                                 println!("Unknown command. Run `help` command for the usage.");
                                 continue;
                             }
@@ -489,7 +570,7 @@ impl Client {
 
                     // Spinner while waiting for responses
                     let mut spin: Option<Spinner> = None;
-                    if message.to_string().starts_with("generate") {
+                    if message.to_string().starts_with("implant gen") {
                         spin = Some(Spinner::new(
                             Spinners::Dots8,
                             "Generating an implant...".into()));
@@ -497,7 +578,7 @@ impl Client {
                     
                     // Receive responses
                     let mut receiver_lock = receiver.lock().unwrap();
-                    let mut recv_state = String::new();
+                    let mut flag = String::new();
                     // let mut 
                     while let Some(Ok(msg)) = receiver_lock.next().await {
                         match msg {
@@ -507,12 +588,12 @@ impl Client {
                                 }
                                 println!("{text}");
 
-                                // Set state
-                                recv_state = text;
+                                // Set flag
+                                flag = text;
                             }
                             Message::Binary(bytes) => {
-                                // Parse the state
-                                let args = match shellwords::split(&recv_state) {
+                                // Parse flag
+                                let args = match shellwords::split(&flag) {
                                     Ok(args) => { args }
                                     Err(err) => {
                                         eprintln!("Can't parse command line: {err}");
@@ -520,9 +601,9 @@ impl Client {
                                     }
                                 };
 
-                                match args[0].as_str() {
-                                    "generated" => {
-                                        let outfile = args[1].to_string();
+                                match (args[0].as_str(), args[1].as_str()) {
+                                    ("Implant",  "generated") => {
+                                        let outfile = args[2].to_string();
                                         fs::write(outfile, &bytes).expect("Unable to write file");
                                     }
                                     _ => {}
@@ -566,10 +647,5 @@ impl Client {
         rl.save_history("history.txt");
     
         Ok(())
-    }
-    
-    fn set_prompt() -> String {
-        let name = "Hermit";
-        format!("{} > ", name.bright_cyan())
     }
 }
