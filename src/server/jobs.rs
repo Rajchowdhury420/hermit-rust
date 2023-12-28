@@ -128,14 +128,14 @@ pub fn check_dupl_job(jobs: &mut Vec<Job>, url: Url) -> Result<(), std::io::Erro
     Ok(())
 }
 
-pub fn format_jobs(jobs: &Vec<Job>) -> String  {
-    info!("Getting jobs status...");
+pub fn format_listeners(jobs: &Vec<Job>) -> String  {
+    info!("Getting listeners status...");
     if jobs.len() == 0 {
-        return String::from("No jobs found.");
+        return String::from("No listeners found.");
     }
 
     let mut output = format!("{:>5} | {:<20} | {:<32} | {:15}\n", "ID", "NAME", "URL", "STATUS");
-    output = output + "------------------------------------------------------------------------------\n";
+    output = output + "-".repeat(96).as_str() + "\n";
 
     for job in jobs {
         output = output + format!("{:>5} | {:<20} | {:<32} | {:15}\n",

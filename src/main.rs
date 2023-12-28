@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use env_logger::Env;
-use log::{error, info, warn};
+use log::warn;
 
 pub mod banner;
 pub mod client;
@@ -23,9 +23,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    // Alone mode
-    // Alone {},
-
     /// C2 client
     Client {
         /// Host to connect to C2 server
@@ -57,8 +54,9 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    config.mkdir("implants".to_string()).unwrap();
-    config.mkdir("tmp".to_string()).unwrap();
+    config.mkdir("agents".to_owned()).unwrap();
+    config.mkdir("implants".to_owned()).unwrap();
+    config.mkdir("tmp".to_owned()).unwrap();
 
     match &cli.command {
         Some(Commands::Client { host, port }) => {

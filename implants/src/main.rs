@@ -3,6 +3,7 @@ pub mod core;
 pub mod config;
 pub mod handlers;
 pub mod systeminfo;
+pub mod utils;
 
 use core::run;
 use config::config::Config;

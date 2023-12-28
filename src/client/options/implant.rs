@@ -1,9 +1,9 @@
 #[derive(Debug)]
 pub struct ImplantOption {
-    pub name: String,
-    pub listener_url: String,
-    pub os: String,
-    pub arch: String,
-    pub format: String,
-    pub sleep: u64,
+    pub name: Option<String>,
+    pub listener_url: Option<String>,
+    pub os: Option<String>,
+    pub arch: Option<String>,
+    pub format: Option<String>,
+    pub sleep: Option<u64>,
 }

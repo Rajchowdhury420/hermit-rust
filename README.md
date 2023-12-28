@@ -50,7 +50,7 @@ hermit server
 hermit client
 
 # Print the usage.
-hermit > help
+Hermit $ help
 ```
 
 <br />
