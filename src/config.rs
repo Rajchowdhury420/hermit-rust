@@ -32,27 +32,4 @@ impl Config {
             Err(e) => Err(e),
         }
     }
-
-    pub fn read_file(&self, file: String) -> Result<String, std::io::Error> {
-        let file = format!("{}/{}", self.app_dir.display(), file);
-        let mut f = fs::File::open(file)?;
-        let mut data = vec![];
-        f.read_to_end(&mut data)?;
-
-        Ok(String::from_utf8(data).unwrap())
-    }
-
-    pub fn write_file(&self, file: String, data: String) -> Result<(), std::io::Error> {
-        let file = format!("{}/{}", self.app_dir.display(), file);
-        let mut f = fs::File::create(file)?;
-        f.write_all(data.as_bytes())?;
-
-        Ok(())
-    }
-
-    pub fn empty_file(&self, file: String) -> Result<(), std::io::Error> {
-        let file = format!("{}/{}", self.app_dir.display(), file);
-        fs::OpenOptions::new().truncate(true).open(file)?;
-        Ok(())
-    }
 }

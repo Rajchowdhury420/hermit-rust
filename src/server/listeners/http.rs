@@ -23,7 +23,7 @@ use crate::{
         jobs::JobMessage,
         server::Server
     },
-    utils::random::random_name,
+    utils::fs::{read_file, empty_file, write_file},
 };
 
 pub async fn start_http_listener(
@@ -156,61 +156,17 @@ async fn task_ask(
 ) -> (StatusCode, String) {
     info!("Agent requested `/task/ask`");
 
-    // Get task
-    match home::home_dir() {
-        Some(path) if !path.as_os_str().is_empty() => {
-            let filepath = format!(
-                "{}/.hermit/agents/{}/task/name",
-                path.display(),
-                payload.name);
-
-            let mut f = File::open(filepath).unwrap();
-            let mut data = vec![];
-            f.read_to_end(&mut data).unwrap();
-
-            let task = String::from_utf8(data).unwrap();
-            info!("task: {task}");
-
-            return (StatusCode::OK, task);
-        },
-        _ => {
-            error!("Unable to get your home dir.");
-            return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
-        },
+    if let Ok(task) = read_file(format!("agents/{}/task/name", payload.name)) {
+        return (StatusCode::OK, String::from_utf8(task).unwrap());
+    } else {
+        return (StatusCode::NOT_FOUND, "Task not found.".to_owned());
     }
 
-    // Get target agent.
-    // let mut target_agent: Option<&mut Agent> = None;
-    // let server = server.lock().await;
-    // let mut agents = server.agents.lock().await;
-    // for agent in agents.iter_mut() {
-    //     if  agent.hostname == payload.hostname &&
-    //         agent.listener_url == payload.listener_url {
-    //             target_agent = Some(agent);
-    //             break;
-    //     }
-    // }
-
-    // if let Some(ta) = target_agent {
-
-        // let task = server.config.read_file(format!("agents/{}/task/name", ta.name)).unwrap();
-        // return (StatusCode::ACCEPTED, task);
-
-    //     let task = ta.task.clone();
-    //     info!("task: {:?}", task);
-    //     match task {
-    //         AgentTask::Empty => {
-    //             return (StatusCode::ACCEPTED, "".to_owned());
-    //         },
-    //         AgentTask::Screenshot => {
-    //             return (StatusCode::ACCEPTED, "screenshot".to_owned());
-    //         },
-    //         AgentTask::Shell(command) => {
-    //             return (StatusCode::ACCEPTED, format!("shell {command}"));
-    //         },
-    //     }
+    // let server_lock = server.lock().await;
+    // if let Ok(task) = server_lock.get_task(payload.name).await {
+    //     return (StatusCode::OK, task);
     // } else {
-    //     return (StatusCode::NOT_ACCEPTABLE, "You're not registered yet.".to_owned());
+    //     return (StatusCode::NOT_ACCEPTABLE, "The agent has not been registered yet.".to_owned());
     // }
 }
 
@@ -220,64 +176,20 @@ async fn task_result(
 ) -> (StatusCode, String) {
     info!("Agent requested `/task/result`");
 
-    // Set task result
-    match home::home_dir() {
-        Some(path) if !path.as_os_str().is_empty() => {
-            let filepath = format!(
-                "{}/.hermit/agents/{}/task/result",
-                path.display(),
-                payload.name.to_owned());
+    if let Ok(_) = write_file(format!("agents/{}/task/result", payload.name), &payload.task_result.unwrap_or(Vec::new())) {
+        // Initialize task
+        empty_file(format!("agents/{}/task/name", payload.name)).unwrap();
 
-            let mut f = File::create(filepath).unwrap();
-            f.write_all(&payload.task_result.unwrap()).unwrap();
-
-            // Initialize the task name
-            let filepath_task_name = format!(
-                "{}/.hermit/agents/{}/task/name", path.display(), payload.name.to_owned());
-            // std::fs::OpenOptions::new().truncate(true).open(filepath_task_name).unwrap();
-            let mut f = File::create(filepath_task_name).unwrap();
-            f.write_all(b"").unwrap();
-
-
-            return (StatusCode::OK, "ok".to_owned());
-        },
-        _ => {
-            error!("Unable to get your home dir.");
-            return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
-        },
+        return (StatusCode::OK, "The task result sent.".to_owned());
+    } else {
+        return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
     }
 
-    // Get target agent
-    // let mut target_agent: Option<&mut Agent> = None;
-    // let server = server.lock().await;
-    // let mut agents = server.agents.lock().await;
-    // for agent in agents.iter_mut() {
-    //     if agent.hostname == payload.hostname &&
-    //         agent.listener_url == payload.listener_url {
-    //             target_agent = Some(agent);
-    //             break;
-    //         }
-    // }
-
-    // Set task result for the agent
-    // if let Some(ta) = target_agent {
-
-        // Write the result to file
-        // let task_result = payload.task_result.unwrap();
-        // server.config.write_file(
-        //     format!("agents/{}/task/result", ta.name),
-        //     String::from_utf8(task_result).unwrap()).unwrap();
-
-        // // Truncate `task/name` file to reset the current task
-        // server.config.empty_file(format!("agents/{}/task/name", ta.name)).unwrap();
-
-    //     ta.task_result = payload.task_result;
-    //     // Initialize the task
-    //     ta.task = AgentTask::Empty;
-
+    // let mut server_lock = server.lock().await;
+    // if let Ok(_) = server_lock.set_task_result(payload.name, payload.task_result.unwrap()).await {
     //     return (StatusCode::OK, "ok".to_owned());
     // } else {
-    //     return (StatusCode::NOT_ACCEPTABLE, "You're not registered yet.".to_owned());
+    //     return (StatusCode::NOT_ACCEPTABLE, "error".to_owned());
     // }
 }
 
