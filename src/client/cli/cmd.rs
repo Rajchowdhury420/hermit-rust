@@ -1,4 +1,4 @@
-use clap::{Arg, Command, value_parser};
+use clap::{Arg, Command, value_parser, ArgAction};
 
 use crate::Client;
 use crate::client::client::Mode;
@@ -158,11 +158,20 @@ pub fn create_cmd(client: &Client) -> Command {
                 )
                 .subcommand(Command::new("shell")
                     .about("Execute shell command for target machine.")
-                    .arg(Arg::new("command")
-                        .help("Specified command.")
-                        .required(true)
-                        .value_parser(value_parser!(String))
-                    )
+                    .args([
+                        Arg::new("cmd")
+                            .help("Use Command Prompt.")
+                            .long("cmd")
+                            .action(ArgAction::SetTrue),
+                        Arg::new("ps")
+                            .help("Use PowerShell.")
+                            .long("ps")
+                            .action(ArgAction::SetTrue),
+                        Arg::new("command")
+                            .help("Specified command.")
+                            .required(true)
+                            .value_parser(value_parser!(String)),
+                    ])
                 )
         }
     }

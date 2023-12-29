@@ -47,7 +47,7 @@ hermit server
 ### C2 Client
 
 ```sh
-hermit client
+hermit client -H your-c2-server.com -P 80
 
 # Print the usage.
 Hermit $ help
@@ -60,6 +60,6 @@ Hermit $ help
 ```sh
 git clone https://github.com/hideckies/hermit.git
 cd hermit
-cargo install
-cargo build
+cargo build --release
+# After compiling, the `hermit` binary will be stored at `target/release/` folder.
 ```

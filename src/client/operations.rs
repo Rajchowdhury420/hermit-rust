@@ -239,6 +239,10 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 }
                 Some(("shell", subm)) => {
                     op = Operation::AgentTaskShell;
+                    let mut pre = "cmd";
+                    if subm.get_flag("ps") {
+                        pre = "powershell";
+                    }
                     let command = match subm.get_one::<String>("command") {
                         Some(c) => { c.to_owned() }
                         None => { "".to_owned() }
@@ -246,7 +250,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
 
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),
-                        command: Some(command),
+                        command: Some(pre.to_string() + " " + command.as_str()),
                     });
                 }
                 // Misc

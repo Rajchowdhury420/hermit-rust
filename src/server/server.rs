@@ -341,6 +341,14 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                             i_sleep.to_owned(),
                                         );
 
+                                        // Check duplicate and add to the list
+                                        if let Err(e) = server_lock.add_implant(&mut implant).await {
+                                            let _ = socket_lock.send(
+                                                Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
+                                            let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                            continue;
+                                        }
+
                                         // Generate an implant
                                         match generate(
                                             &server_lock.config,
@@ -359,17 +367,15 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                                     ))).await;
                                                 let _ = socket_lock.send(Message::Binary(buffer)).await;
             
-                                                 // Add to the list
-                                                if let Err(e) = server_lock.add_implant(&mut implant).await {
-                                                    let _ = socket_lock.send(
-                                                        Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
-                                                    let _ = socket_lock.send(Message::Text("[done]".to_string())).await;
-                                                    continue;
-                                                }
+                                                //  // Add to the list
+                                                // if let Err(e) = server_lock.add_implant(&mut implant).await {
+                                                //     let _ = socket_lock.send(
+                                                //         Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
+                                                //     }            
                                             },
                                             Err(e) => {
                                                 let _ = socket_lock.send(
-                                                    Message::Text(format!("Could not generate an imaplant: {e}"))
+                                                    Message::Text(format!("[implant:gen:error] Could not generate an imaplant: {e}"))
                                                 ).await;
                                             }
                                         }

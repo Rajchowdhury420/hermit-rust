@@ -6,7 +6,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 use windows::{
-    core::{Error, HRESULT, HSTRING, PCWSTR},
+    core::{Error, HRESULT, HSTRING},
     Win32::Networking::WinHttp::*
 };
 

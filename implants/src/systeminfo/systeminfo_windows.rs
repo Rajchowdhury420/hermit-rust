@@ -3,10 +3,10 @@
 //  - https://microsoft.github.io/windows-docs-rs/doc/windows/
 use std::io::{Error, ErrorKind};
 use windows::{
-    core::{HSTRING, PSTR, PWSTR},
+    core::PWSTR,
     Win32::{
-        Foundation::{ERROR_SUCCESS, WIN32_ERROR, ERROR_BUFFER_OVERFLOW},
-        Networking::WinSock::{AF_UNSPEC, SOCKADDR_INET, SOCKADDR},
+        Foundation::{WIN32_ERROR, ERROR_BUFFER_OVERFLOW},
+        Networking::WinSock::AF_UNSPEC,
         NetworkManagement::IpHelper::{
             GetAdaptersAddresses,
             GET_ADAPTERS_ADDRESSES_FLAGS,
@@ -15,11 +15,6 @@ use windows::{
             ComputerNameDnsHostname,
             GetComputerNameExW,
             GetSystemInfo,
-            //     GetSystemWindowsDirectoryW,
-            //     GetSystemWow64DirectoryW,
-            //     GetSystemWow64Directory2W,
-            //     GetVersionExW,
-            //     GetWindowsDirectoryW
             SYSTEM_INFO,
         },
     },

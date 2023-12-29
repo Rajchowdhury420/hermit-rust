@@ -367,6 +367,7 @@ impl Client {
                                 println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
                             }
                             "[implant:gen:ok]" => {
+                                // Will receive binary data after that, so don't stop the spinner yet.
                                 recv_flag = args.join(" ");
                             }
                             "[implant:gen:error]" => {
