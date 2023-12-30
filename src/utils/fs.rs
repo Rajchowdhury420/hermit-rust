@@ -1,5 +1,35 @@
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{Error, ErrorKind, Read, Write};
+
+pub fn mkdir(dirpath: String) -> Result<(), std::io::Error> {
+    match home::home_dir() {
+        Some(path) if !path.as_os_str().is_empty() => {
+            let dirpath = format!("{}/.hermit/{}", path.display(), dirpath);
+            match fs::create_dir_all(&dirpath) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            }
+        },
+        _ => {
+            return Err(Error::new(ErrorKind::NotFound, "Home directory not found."));
+        },
+    }
+}
+
+pub fn mkfile(filepath: String) -> Result<(), std::io::Error> {
+    match home::home_dir() {
+        Some(path) if !path.as_os_str().is_empty() => {
+            let filepath = format!("{}/.hermit/{}", path.display(), filepath);
+            match fs::File::create(filepath) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            }
+        },
+        _ => {
+            return Err(Error::new(ErrorKind::NotFound, "Home directory not found."));
+        },
+    }
+}
 
 pub fn read_file(filepath: String) -> Result<Vec<u8>, Error> {
     match home::home_dir() {

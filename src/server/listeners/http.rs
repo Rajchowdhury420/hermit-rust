@@ -10,8 +10,6 @@ use hyper_util::rt::TokioIo;
 use log::{error, info};
 use std::time::Duration;
 use std::sync::Arc;
-use std::fs::File;
-use std::io::{Read, Write};
 use tokio::sync::{broadcast, Mutex, watch};
 use tower::Service;
 use tower_http::trace::TraceLayer;

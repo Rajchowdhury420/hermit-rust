@@ -13,6 +13,7 @@ use crate::banner::banner;
 use crate::client::client::Client;
 use crate::config::Config;
 use crate::server::server::run as run_server;
+use crate::utils::fs::mkdir;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -54,19 +55,19 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    config.mkdir("agents".to_owned()).unwrap();
-    config.mkdir("implants".to_owned()).unwrap();
-    config.mkdir("tmp".to_owned()).unwrap();
+    mkdir("agents".to_owned()).unwrap();
+    mkdir("implants".to_owned()).unwrap();
+    mkdir("tmp".to_owned()).unwrap();
 
     match &cli.command {
         Some(Commands::Client { host, port }) => {
-            config.mkdir("client".to_string()).unwrap();
+            mkdir("client".to_string()).unwrap();
 
             banner("client");
             let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
         },
         Some(Commands::Server {}) => {
-            config.mkdir("server".to_string()).unwrap();
+            mkdir("server".to_string()).unwrap();
 
             banner("server");
             let _ = run_server(config).await;
