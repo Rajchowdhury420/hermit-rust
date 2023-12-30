@@ -444,7 +444,7 @@ impl Client {
                             "[task:shell:ok]" => {
                                 let result_string = String::from_utf8(bytes).unwrap();
                                 stop_spin(&mut spin);
-                                println!("{}", result_string);
+                                println!("{} {}", "[+]".green(), result_string);
                             }
                             _ => {}
                         }

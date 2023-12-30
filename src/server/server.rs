@@ -52,7 +52,9 @@ impl Server {
 
         // Check if the same agent already exists
         for agent in agents.iter() {
-            if agent.hostname == new_agent.hostname &&
+            if  agent.hostname == new_agent.hostname &&
+                agent.os == new_agent.os &&
+                agent.arch == new_agent.arch &&
                 agent.listener_url == new_agent.listener_url
             {
                 return Err(Error::new(ErrorKind::Other, "This agent has already registered"));

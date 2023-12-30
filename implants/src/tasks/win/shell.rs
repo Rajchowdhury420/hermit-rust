@@ -53,7 +53,7 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
     let args = match shellwords::split(command.as_str()) {
         Ok(args) => { args }
         Err(err) => {
-            println!("Can't parse command line: {err}");
+            // println!("Can't parse command line: {err}");
             vec!["".to_string()]
         }
     };
@@ -101,7 +101,7 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
             &mut si,
             &mut pi,
         ) {
-            println!("Could not create a process: {}", e.to_string());
+            // println!("Could not create a process: {}", e.to_string());
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
             return Err(e);
@@ -109,11 +109,11 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
 
         let mut bprocessend = false;
         while !bprocessend {
-            println!("Retrieving the result");
+            // println!("Retrieving the result");
             bprocessend = WaitForSingleObject(pi.hProcess, 50) == WAIT_OBJECT_0;
 
             loop {
-                println!("Start writing buffer...");
+                // println!("Start writing buffer...");
                 let mut buf = [0u8; 1024];
                 let mut dwread: u32 = 0;
                 let mut dwavail: u32 = 0;
@@ -137,7 +137,6 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
                 let success = ReadFile(
                     hreadpipe,
                     Some(&mut buf),
-                    // Some(&mut std::cmp::min((buf.len() - 1) as u32, dwavail)),
                     Some(&mut dwread),
                     Some(&mut OVERLAPPED::default()));
                 if success.is_err() {
@@ -145,12 +144,12 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
                     break;
                 }
                 
-                println!("dwread: {}", dwread);
+                // println!("dwread: {}", dwread);
 
                 buf[dwread as usize] = 0;
                 output.extend(buf.to_vec());
-                println!("output: {:?}", output.to_owned());
-                println!("outout length: {}", output.len());
+                // println!("output: {:?}", output.to_owned());
+                // println!("outout length: {}", output.len());
             }
         }
 

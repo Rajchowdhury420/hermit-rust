@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub struct AgentData {
     pub name: String,
     pub hostname: String,
+    pub os: String,
+    pub arch: String,
     pub listener_url: String,
 
     pub task_result: Option<Vec<u8>>,
@@ -23,6 +25,8 @@ pub struct Agent {
     pub id: u32,
     pub name: String,
     pub hostname: String,
+    pub os: String,
+    pub arch: String,
     pub listener_url: String,
 
     pub task: AgentTask,
@@ -36,17 +40,18 @@ pub fn format_agents(agents: &Vec<Agent>) -> String  {
     }
 
     let mut output = format!(
-        "{:>5} | {:<20} | {:<20} | {:<20}\n",
-        "ID", "NAME", "HOSTNAME", "LISTENER",
+        "{:>5} | {:<20} | {:<20} | {:<15} | {:<20}\n",
+        "ID", "NAME", "HOSTNAME", "OS", "LISTENER",
     );
     output = output + "-".repeat(96).as_str() + "\n";
 
     for agent in agents {
         output = output + format!(
-            "{:>5} | {:<20} | {:<20} | {:<20}\n",
+            "{:>5} | {:<20} | {:<20} | {:<15} | {:<20}\n",
             agent.id.to_owned(),
             agent.name.to_owned(),
             agent.hostname.to_owned(),
+            format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned()),
             agent.listener_url.to_owned(),
         ).as_str();
     }

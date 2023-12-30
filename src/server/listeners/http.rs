@@ -135,6 +135,8 @@ async fn register(
         id: 0,
         name: payload.name,
         hostname: payload.hostname,
+        os: payload.os,
+        arch: payload.arch,
         listener_url: payload.listener_url,
         task: AgentTask::Empty,
         task_result: None,

