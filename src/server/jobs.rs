@@ -145,7 +145,7 @@ pub fn format_listeners(jobs: &Vec<Job>) -> String  {
                 job.protocol.to_string(),
                 job.host.to_string(),
                 job.port.to_string()),
-            if job.running == true { "active".to_string().green().bold() } else { "inactive".to_string().red().bold() },
+            if job.running == true { "active".to_string().green() } else { "inactive".to_string().red() },
         ).as_str();
     }
 

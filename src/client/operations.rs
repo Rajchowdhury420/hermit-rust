@@ -26,11 +26,12 @@ pub enum Operation {
     StopListener,
     ListListeners,
     // Agents
-    InteractAgent,
+    UseAgent,
     ListAgents,
     // Implants
     GenerateImplant,
     DownloadImplant,
+    DeleteImplant,
     ListImplants,
 
     // Agent operations
@@ -127,8 +128,8 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 // Agent
                 Some(("agent", subm)) => {
                     match subm.subcommand() {
-                        Some(("interact", subm2)) => {
-                            op = Operation::InteractAgent;
+                        Some(("use", subm2)) => {
+                            op = Operation::UseAgent;
                             let name = match subm2.get_one::<String>("name") {
                                 Some(n) => { n.to_owned() },
                                 None => { "0".to_owned() },
@@ -191,10 +192,26 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         Some(("download", subm2)) => {
                             op = Operation::DownloadImplant;
                             let name = match subm2.get_one::<String>("name") {
-                                Some(n) => { n.to_owned() },
-                                None => { "0".to_owned() }
+                                Some(n) => n.to_owned(),
+                                None => "0".to_owned(),
                             };
         
+                            options.implant_opt = Some(ImplantOption {
+                                name: Some(name),
+                                listener_url: None,
+                                os: None,
+                                arch: None,
+                                format: None,
+                                sleep: None,
+                            });
+                        }
+                        Some(("delete", subm2)) => {
+                            op = Operation::DeleteImplant;
+                            let name = match subm2.get_one::<String>("name") {
+                                Some(n) => n.to_owned(),
+                                None => "0".to_owned(),
+                            };
+
                             options.implant_opt = Some(ImplantOption {
                                 name: Some(name),
                                 listener_url: None,

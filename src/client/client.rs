@@ -193,15 +193,15 @@ impl Client {
                                 message = Message::Text("listener list".to_string());
                             }
                             // Agent
-                            Operation::InteractAgent => {
+                            Operation::UseAgent => {
                                 if let Some(agent_opt) = commands.options.agent_opt {
                                     let ag_name = agent_opt.name;
 
                                     // Check if the agent exists
-                                    message = Message::Text(format!("agent interact {}", ag_name));
+                                    message = Message::Text(format!("agent use {}", ag_name));
 
                                     // Set send flag
-                                    send_flag = "[agent:interact]".to_string();
+                                    send_flag = "[agent:use]".to_string();
                                 }
                             }
                             Operation::ListAgents => {
@@ -238,6 +238,17 @@ impl Client {
                                     send_flag = "[implant:download]".to_string();
                                 } else {
                                     continue;
+                                }
+                            }
+                            Operation::DeleteImplant => {
+                                if let Some(implant_opt) = commands.options.implant_opt {
+                                    let name = implant_opt.name.unwrap();
+
+                                    message = Message::Text(
+                                        format!("implant delete {}", name)
+                                    );
+
+                                    send_flag = "[implant:delete]".to_string();
                                 }
                             }
                             Operation::ListImplants => {
@@ -315,7 +326,7 @@ impl Client {
             // Spinner while waiting for responses
             let mut spin: Option<Spinner> = None;
             match send_flag.as_str() {
-                "[agent:interact]" => {
+                "[agent:use]" => {
                     spin = Some(Spinner::new(
                         Spinners::Dots8,
                         "Checking the agent exists...".into()))
@@ -329,6 +340,11 @@ impl Client {
                     spin = Some(Spinner::new(
                         Spinners::Dots8,
                         "Downloaing the implant...".into()));
+                }
+                "[implant:delete]" => {
+                    spin = Some(Spinner::new(
+                        Spinners::Dots8,
+                        "Deleting the implant...".into()));
                 }
                 "[task:set]" => {
                     spin = Some(Spinner::new(
@@ -356,7 +372,7 @@ impl Client {
 
                         match args[0].as_str() {
                             "[done]" => break,
-                            "[agent:interact:ok]" => {
+                            "[agent:use:ok]" => {
                                 // Switch to the agent mode
                                 self.mode = Mode::Agent(args[1].to_owned());
                                 stop_spin(&mut spin);
@@ -371,6 +387,14 @@ impl Client {
                                 recv_flag = args.join(" ");
                             }
                             "[implant:gen:error]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
+                            }
+                            "[implant:delete:ok]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[+]".green(), args[1..].join(" ").to_owned());
+                            }
+                            "[implant:delete:error]" => {
                                 stop_spin(&mut spin);
                                 println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
                             }
@@ -404,15 +428,16 @@ impl Client {
                                 fs::write(outfile.clone(), &bytes).expect("Unable to write file");
                                 stop_spin(&mut spin);
                                 println!(
-                                    "{} Implant generated at '{}'.",
+                                    "{} Implant generated at {}",
                                     "[+]".green(),
-                                    outfile.to_string().cyan().bold());
+                                    outfile.to_string().cyan());
                                 println!(
                                     "{} Transfer this file to target machine and execute it to interact with our C2 server.",
                                     "[i]".green());
                             }
                             "[task:screenshot:ok]" => {
-                                let result_string = String::from_utf8(bytes).unwrap();
+                                // TODO: Fix garbled characters other than English.
+                                let result_string = String::from_utf8_lossy(&bytes).to_string();
                                 stop_spin(&mut spin);
                                 println!("{}", result_string);
                             }

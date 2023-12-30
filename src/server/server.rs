@@ -74,6 +74,15 @@ impl Server {
     pub async fn add_implant(&mut self, new_implant: &mut Implant) -> Result<(), Error> {
         let mut implants = self.implants.lock().await;
 
+        // Update the implant ID
+        new_implant.id = implants.len() as u32;
+        implants.push(new_implant.to_owned());
+        Ok(())
+    }
+
+    pub async fn is_dupl_implant(&mut self, new_implant: &mut Implant) -> bool {
+        let implants = self.implants.lock().await;
+
         // Check if the same implant already exists
         for implant in implants.iter() {
             if  implant.listener_url == new_implant.listener_url &&
@@ -82,17 +91,10 @@ impl Server {
                 implant.format == new_implant.format &&
                 implant.sleep == new_implant.sleep
             {
-                return Err(Error::new(ErrorKind::Other,
-                    format!(
-                        "Similar implant (id: {}) already exists. Please use it with `implant download {}`",
-                        implant.id, implant.id)));
+                return true;
             }
         }
-
-        // Update the implant ID
-        new_implant.id = implants.len() as u32;
-        implants.push(new_implant.to_owned());
-        Ok(())
+        return false;
     }
 }
 
@@ -286,7 +288,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                             }
                             "agent" => {
                                 match args[1].as_str() {
-                                    "interact" => {
+                                    "use" => {
                                         let ag_name = args[2].to_string();
                                         let agents = server_lock.agents.lock().await;
 
@@ -294,7 +296,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                         for agent in agents.iter() {
                                             if agent.id.to_string() == ag_name || agent.name == ag_name {
                                                 let _ = socket_lock.send(
-                                                    Message::Text(format!("[agent:interact:ok] {}", agent.name))).await;
+                                                    Message::Text(format!("[agent:use:ok] {}", agent.name))).await;
                                                 let _ = socket_lock.send(
                                                     Message::Text("[done]".to_owned())
                                                 ).await;
@@ -305,7 +307,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
 
                                         if !is_ok {
                                             let _ = socket_lock.send(
-                                                Message::Text("[agent:interact:error] Agent not found.".to_owned())
+                                                Message::Text("[agent:use:error] Agent not found.".to_owned())
                                             ).await;
                                             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
                                         }
@@ -341,10 +343,12 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                             i_sleep.to_owned(),
                                         );
 
-                                        // Check duplicate and add to the list
-                                        if let Err(e) = server_lock.add_implant(&mut implant).await {
+                                        // Check duplicate
+                                        if server_lock.is_dupl_implant(&mut implant).await {
                                             let _ = socket_lock.send(
-                                                Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
+                                                Message::Text(
+                                                    "[implant:gen:error] Similar implant already exists. Please use it with `implant download`.".to_owned()
+                                                )).await;
                                             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
                                             continue;
                                         }
@@ -367,11 +371,19 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                                     ))).await;
                                                 let _ = socket_lock.send(Message::Binary(buffer)).await;
             
-                                                //  // Add to the list
-                                                // if let Err(e) = server_lock.add_implant(&mut implant).await {
-                                                //     let _ = socket_lock.send(
-                                                //         Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
-                                                //     }            
+                                                // Add to the list (check duplicate again before adding it)
+                                                if server_lock.is_dupl_implant(&mut implant).await {
+                                                    let _ = socket_lock.send(
+                                                        Message::Text(
+                                                            "[implant:gen:error] Similar implant already exists. Please use it with `implant download`.".to_owned()
+                                                        )).await;
+                                                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                                    continue;
+                                                }
+                                                if let Err(e) = server_lock.add_implant(&mut implant).await {
+                                                    let _ = socket_lock.send(
+                                                        Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
+                                                    }            
                                             },
                                             Err(e) => {
                                                 let _ = socket_lock.send(
@@ -426,6 +438,34 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                                     format!("[implant:gen:error] Implant not found."))).await;
                                         }
 
+                                        let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                    }
+                                    "delete" => {
+                                        info!("Deleting the implant.");
+                                        let i_name = args[2].to_owned();
+
+                                        // Remove the implant from the list
+                                        let mut removed = false;
+                                        let mut implants = server_lock.implants.lock().await;
+                                        for (idx, implant) in implants.iter_mut().enumerate() {
+                                            if implant.id.to_string() == i_name || implant.name == i_name {
+                                                implants.remove(idx);
+                                                removed = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if removed {
+                                            let _ = socket_lock.send(
+                                                Message::Text(
+                                                    "[implant:delete:ok] Implant deleted successfully.".to_owned()
+                                                )).await;
+                                        } else {
+                                            let _ = socket_lock.send(
+                                                Message::Text(
+                                                    "[implant:delete:error] Implant could not be delete.".to_owned()
+                                                )).await;
+                                        }
                                         let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
                                     }
                                     "list" => {
@@ -487,6 +527,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                             continue;
                                         }
 
+                                        let mut cnt: u8 = 0;
                                         loop {
                                             info!("Getting task result...");
                                             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
@@ -503,6 +544,12 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                                     break;
                                                 } else {
                                                     warn!("task result is empty.");
+                                                    cnt += 1;
+                                                    if cnt > 5 {
+                                                        let _ = socket_lock.send(Message::Text("[task:error] Could not get the task result.".to_owned())).await;
+                                                        let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                                        break;
+                                                    }
                                                 }
                                             } else {
                                                 error!("Could not read `task/result` file.");

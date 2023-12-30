@@ -11,8 +11,7 @@ use windows::{
     Win32::{
         Foundation::{
             BOOL, CloseHandle, HANDLE,
-            WAIT_ABANDONED, WAIT_EVENT, WAIT_FAILED,
-            WAIT_OBJECT_0, WAIT_TIMEOUT,
+            WAIT_EVENT, WAIT_OBJECT_0,
         },
         Security::SECURITY_ATTRIBUTES,
         Storage::FileSystem::ReadFile,
@@ -20,7 +19,6 @@ use windows::{
             Pipes::{CreatePipe, PeekNamedPipe},
             Threading::{
                 CreateProcessW,
-                GetExitCodeProcess, INFINITE,
                 PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
                 STARTF_USESHOWWINDOW, STARTF_USESTDHANDLES,
                 STARTUPINFOW,
@@ -28,6 +26,7 @@ use windows::{
             },
             IO::OVERLAPPED,
         },
+        UI::WindowsAndMessaging::SW_HIDE,
     }
 };
 
@@ -38,7 +37,7 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
     let mut hwritepipe = HANDLE::default();
 
     let mut secattr = SECURITY_ATTRIBUTES::default();
-    secattr.bInheritHandle = BOOL::default();
+    secattr.bInheritHandle = BOOL(true as i32);
     secattr.lpSecurityDescriptor = std::ptr::null_mut() as *mut c_void;
     
     unsafe {
@@ -60,8 +59,8 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
     };
 
     let command = match args[0].as_str() {
-        "cmd" => "command.exe /c ".to_string() + args[1..].join(" ").as_str(),
-        "powershell" => "powershell.exe /c".to_string() + args[1..].join(" ").as_str(),
+        "cmd" => "cmd.exe /c ".to_string() + args[1..].join(" ").as_str(),
+        "powershell" => "powershell.exe /c ".to_string() + args[1..].join(" ").as_str(),
         _ => {
             return Err(Error::from_win32());
         },
@@ -74,6 +73,10 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
     // Create a process
     let mut si = STARTUPINFOW::default();
     si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+    si.hStdOutput = hwritepipe;
+    si.hStdError = hwritepipe;
+    si.wShowWindow = SW_HIDE.0 as u16;
 
     let mut pi = PROCESS_INFORMATION::default();
 
@@ -104,18 +107,16 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
             return Err(e);
         };
 
-        // Retrieve the result
-        loop {
-            let wait_event = WaitForSingleObject(pi.hProcess, INFINITE);
-            match wait_event {
-                WAIT_ABANDONED | WAIT_OBJECT_0 | WAIT_TIMEOUT | WAIT_FAILED => break,
-                _ => {},
-            }
+        let mut bprocessend = false;
+        while !bprocessend {
+            println!("Retrieving the result");
+            bprocessend = WaitForSingleObject(pi.hProcess, 50) == WAIT_OBJECT_0;
 
             loop {
+                println!("Start writing buffer...");
                 let mut buf = [0u8; 1024];
                 let mut dwread: u32 = 0;
-                let mut dwavail = 0;
+                let mut dwavail: u32 = 0;
 
                 let success = PeekNamedPipe(
                     hreadpipe,
@@ -129,7 +130,6 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
                     break;
                 }
 
-                println!("dwavail: {}", dwavail);
                 if dwavail == 0 {
                     break;
                 }
@@ -144,20 +144,23 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
                     println!("Error reading file.");
                     break;
                 }
+                
+                println!("dwread: {}", dwread);
 
                 buf[dwread as usize] = 0;
-                // output += buf.to_vec();
                 output.extend(buf.to_vec());
+                println!("output: {:?}", output.to_owned());
+                println!("outout length: {}", output.len());
             }
         }
 
-        
         // GetExitCodeProcess(pi.hProcess, 0);
 
+        CloseHandle(hwritepipe);
+        CloseHandle(hreadpipe);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
     }
-
 
     Ok(output.to_vec())
 }
