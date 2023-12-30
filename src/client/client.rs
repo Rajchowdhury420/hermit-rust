@@ -358,6 +358,8 @@ impl Client {
             let mut receiver_lock = receiver.lock().unwrap();
             let mut recv_flag = String::new();
 
+            let mut allbytes: Vec<u8> = Vec::new();
+
             while let Some(Ok(msg)) = receiver_lock.next().await {
                 match msg {
                     Message::Text(text) => {
@@ -382,7 +384,11 @@ impl Client {
                                 stop_spin(&mut spin);
                                 println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
                             }
-                            "[implant:gen:ok]" => {
+                            "[implant:gen:ok:sending]" => {
+                                // Will receive binary data after that, so don't stop the spinner yet.
+                                recv_flag = args.join(" ");
+                            }
+                            "[implant:gen:ok:complete]" => {
                                 // Will receive binary data after that, so don't stop the spinner yet.
                                 recv_flag = args.join(" ");
                             }
@@ -413,7 +419,6 @@ impl Client {
 
                     }
                     Message::Binary(bytes) => {
-                        println!("Received binary");
                         // Parse recv flag
                         let args = match shellwords::split(&recv_flag) {
                             Ok(args) => args,
@@ -424,9 +429,14 @@ impl Client {
                         };
 
                         match args[0].as_str() {
-                            "[implant:gen:ok]" => {
+                            "[implant:gen:ok:sending]" => {
+                                allbytes.extend(&bytes);
+                            }
+                            "[implant:gen:ok:complete]" => {
+                                allbytes.extend(&bytes);
+
                                 let outfile = args[1].to_string();
-                                fs::write(outfile.clone(), &bytes).expect("Unable to write file");
+                                fs::write(outfile.clone(), &allbytes).expect("Unable to write file");
                                 stop_spin(&mut spin);
                                 println!(
                                     "{} Implant generated at {}",
