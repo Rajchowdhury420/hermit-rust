@@ -413,6 +413,7 @@ impl Client {
 
                     }
                     Message::Binary(bytes) => {
+                        println!("Received binary");
                         // Parse recv flag
                         let args = match shellwords::split(&recv_flag) {
                             Ok(args) => args,
@@ -436,13 +437,17 @@ impl Client {
                                     "[i]".green());
                             }
                             "[task:screenshot:ok]" => {
-                                // TODO: Fix garbled characters other than English.
-                                let result_string = String::from_utf8_lossy(&bytes).to_string();
+                                let outfile = args[1].to_string();
+                                fs::write(outfile.clone(), &bytes).expect("Unable to write file.");
                                 stop_spin(&mut spin);
-                                println!("{}", result_string);
+                                println!(
+                                    "{} Screenshot saved at {}",
+                                    "[+]".green(),
+                                    outfile.to_string().cyan());
                             }
                             "[task:shell:ok]" => {
-                                let result_string = String::from_utf8(bytes).unwrap();
+                                // TODO: Fix garbled characters other than English.
+                                let result_string = String::from_utf8_lossy(&bytes).to_string();
                                 stop_spin(&mut spin);
                                 println!("{} {}", "[+]".green(), result_string);
                             }

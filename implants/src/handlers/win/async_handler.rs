@@ -10,7 +10,7 @@ use windows::{
     Win32::Networking::WinHttp::*
 };
 
-use super::handlers_windows::HRequest;
+use super::handler::HRequest;
 
 const WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS: u32 = WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE
     | WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE
