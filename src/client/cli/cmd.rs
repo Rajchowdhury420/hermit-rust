@@ -153,7 +153,7 @@ pub fn create_cmd(client: &Client) -> Command {
                     .about("List implants generated.")
                 )
         }
-        Mode::Agent(_) => {
+        Mode::Agent(_, _) => {
             // Inspired by: https://havocframework.com/docs/agent
             cmd
                 .subcommand(Command::new("exit")
@@ -202,7 +202,7 @@ pub fn create_cmd(client: &Client) -> Command {
                     ])
                 )
                 .subcommand(Command::new("screenshot")
-                    .about("Take a screenshot for target machine. (Under development)")
+                    .about("Take a screenshot for target machine.")
                 )
                 .subcommand(Command::new("shell")
                     .about("Execute shell command for target machine.")

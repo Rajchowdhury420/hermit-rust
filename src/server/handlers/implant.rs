@@ -61,7 +61,7 @@ pub async fn handle_implant(
                     let _ = send_implant_binary(
                         &mut buffer,
                         socket_lock,
-                        output.to_owned()
+                        output.to_owned(),
                     ).await;
 
                     // Add to the list (check duplicate again before adding it)
@@ -115,7 +115,7 @@ pub async fn handle_implant(
                         let _ = send_implant_binary(
                             &mut buffer,
                             socket_lock,
-                            output.to_owned()
+                            output.to_owned(),
                         ).await;
 
                     },
@@ -174,7 +174,11 @@ pub async fn handle_implant(
     }
 }
 
-async fn send_implant_binary(buffer: &mut Vec<u8>, socket_lock: &mut MutexGuard<'_, WebSocket>, output: String) {
+async fn send_implant_binary(
+    buffer: &mut Vec<u8>,
+    socket_lock: &mut MutexGuard<'_, WebSocket>,
+    output: String,
+) {
     if buffer.len() > 10000000 {
                                                     
         // Split buffer

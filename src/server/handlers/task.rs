@@ -45,8 +45,7 @@ pub async fn handle_task(
                     if task_result.len() > 0 {
                         info!("task result found.");
                         let outfile = format!(
-                            "{}/agents/{}/screenshots/screenshot_1.png",
-                            server_lock.config.app_dir.display(),
+                            "agents/{}/screenshots/screenshot_1.png",
                             ag_name.to_owned(),
                         );
                         let _ = socket_lock.send(Message::Text(

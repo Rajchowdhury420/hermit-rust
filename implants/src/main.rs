@@ -1,12 +1,12 @@
-pub mod agents;
 pub mod core;
 pub mod config;
-pub mod handlers;
-pub mod systeminfo;
-pub mod tasks;
 pub mod utils;
 
-use core::run;
+#[cfg(target_os = "linux")]
+use core::run_linux::run;
+#[cfg(target_os = "windows")]
+use core::run_windows::run;
+
 use config::config::Config;
 
 include!(concat!(env!("OUT_DIR"), "/init.rs"));

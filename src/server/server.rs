@@ -123,7 +123,7 @@ pub async fn run(config: Config) {
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         );
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:9999")
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:9999")
         .await
         .unwrap();
     info!("listening on {}", listener.local_addr().unwrap());

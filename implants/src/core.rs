@@ -1,9 +1,9 @@
 #[cfg(target_os = "linux")]
-pub mod linux;
-#[cfg(target_os = "linux")]
-pub use self::linux::*;
+pub mod run_linux;
+#[cfg(target_os = "windows")]
+pub mod run_windows;
 
-// #[cfg(target_os = "windows")]
-pub mod win;
-// #[cfg(target_os = "windows")]
-pub use self::win::*;
+pub mod agents;
+pub mod handlers;
+pub mod systeminfo;
+pub mod tasks;

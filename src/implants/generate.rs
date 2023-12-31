@@ -7,6 +7,7 @@ use std::str::from_utf8;
 use url::Url;
 
 use crate::config::Config;
+use crate::utils::fs::{get_app_dir, read_file};
 
 /// Generate an implant
 /// References:
@@ -35,7 +36,7 @@ pub fn generate(
     env::set_var("SLEEP", sleep.to_string());
     env::set_var("OUT_DIR", format!("implants/src"));
 
-    let outdir = format!("{}/implants/{}", config.app_dir.display(), name.to_string());
+    let outdir = format!("{}/implants/{}", get_app_dir(), name.to_string());
 
     let (cmd, args, outfile) = match (os.as_str(), arch.as_str(), format.as_str()) {
         ("linux", "amd64", "elf") => {
@@ -50,7 +51,7 @@ pub fn generate(
                     outdir.as_str(),
                     "--release"
                 ],
-                format!("{}/x86_64-unknown-linux-gnu/release/implant", outdir),
+                format!("implants/{}/x86_64-unknown-linux-gnu/release/implant", name.to_string()),
             )
         }
         ("linux", "i686", "elf") => {
@@ -65,7 +66,7 @@ pub fn generate(
                     outdir.as_str(),
                     "--release"
                 ],
-                format!("{}/i686-unknown-linux-gnu/release/implant", outdir),
+                format!("implants/{}/i686-unknown-linux-gnu/release/implant", name.to_string()),
             )
         }
         ("windows", "amd64", "exe") => {
@@ -80,7 +81,7 @@ pub fn generate(
                     outdir.as_str(),
                     "--release"
                 ],
-                format!("{}/x86_64-pc-windows-gnu/release/implant.exe", outdir),
+                format!("implants/{}/x86_64-pc-windows-gnu/release/implant.exe", name.to_string()),
             )
         }
         ("windows", "i686", "exe") => {
@@ -95,14 +96,13 @@ pub fn generate(
                     outdir.as_str(),
                     "--release"
                 ],
-                format!("{}/i686-pc-windows-gnu/release/implant.exe", outdir),
+                format!("implants/{}/i686-pc-windows-gnu/release/implant.exe", name.to_string()),
             )
         }
         _ => {
             return Err(Error::new(ErrorKind::Other, "Invalid options."));
         }
     };
-
 
     let output = Command::new(cmd)
         .args(args)
@@ -112,9 +112,7 @@ pub fn generate(
         Ok(o) => {
             if o.status.success() {
                 info!("Generation Success: {:#?}", from_utf8(&o.stdout).unwrap());
-                let mut f = File::open(outfile.to_owned()).unwrap();
-                let mut buffer = Vec::new();
-                f.read_to_end(&mut buffer).unwrap();
+                let buffer = read_file(outfile.to_string()).unwrap();
                 return Ok((outfile.to_string(), buffer));
             } else {
                 error!("Generation Error: {:#?}", from_utf8(&o.stderr).unwrap());

@@ -19,7 +19,7 @@ pub async fn handle_agent(args: Vec<String>, socket_lock: &mut MutexGuard<'_, We
             for agent in agents.iter() {
                 if agent.id.to_string() == ag_name || agent.name == ag_name {
                     let _ = socket_lock.send(
-                        Message::Text(format!("[agent:use:ok] {}", agent.name))).await;
+                        Message::Text(format!("[agent:use:ok] {} {}", agent.name, agent.os))).await;
                     let _ = socket_lock.send(
                         Message::Text("[done]".to_owned())
                     ).await;

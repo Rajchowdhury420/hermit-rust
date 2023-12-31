@@ -1,0 +1,6 @@
+#[cfg(target_os = "linux")]
+pub mod linux;
+#[cfg(target_os = "windows")]
+pub mod win;
+
+pub mod screenshot;

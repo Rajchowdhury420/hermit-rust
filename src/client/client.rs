@@ -12,16 +12,11 @@ use tokio_tungstenite::{
     tungstenite::protocol::Message,
 };
 
-use super::options::{
-    agent::AgentOption,
-    implant::ImplantOption,
-    listener::ListenerOption,
-    options::Options
-};
+use super::options::options::Options;
 use super::operations::{Operation, set_operations};
 use super::cli::cmd::create_cmd;
 use super::prompt::set_prompt;
-use crate::utils::random::random_name;
+use crate::utils::fs::{write_file, get_app_dir};
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_FAILURE: i32 = 0;
@@ -43,7 +38,7 @@ impl Commands {
 
 pub enum Mode {
     Root,
-    Agent(String),
+    Agent(String, String),
 }
 
 pub struct Client {
@@ -376,7 +371,7 @@ impl Client {
                             "[done]" => break,
                             "[agent:use:ok]" => {
                                 // Switch to the agent mode
-                                self.mode = Mode::Agent(args[1].to_owned());
+                                self.mode = Mode::Agent(args[1].to_owned(), args[2].to_owned());
                                 stop_spin(&mut spin);
                                 println!("{} The agent found. Switch to the agent mode.", "[+]".green());
                             }
@@ -436,24 +431,24 @@ impl Client {
                                 allbytes.extend(&bytes);
 
                                 let outfile = args[1].to_string();
-                                fs::write(outfile.clone(), &allbytes).expect("Unable to write file");
+                                write_file(outfile.to_string(), &allbytes).unwrap();
                                 stop_spin(&mut spin);
                                 println!(
                                     "{} Implant generated at {}",
                                     "[+]".green(),
-                                    outfile.to_string().cyan());
+                                    format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
                                 println!(
                                     "{} Transfer this file to target machine and execute it to interact with our C2 server.",
                                     "[i]".green());
                             }
                             "[task:screenshot:ok]" => {
                                 let outfile = args[1].to_string();
-                                fs::write(outfile.clone(), &bytes).expect("Unable to write file.");
+                                write_file(outfile.to_string(), &bytes).unwrap();
                                 stop_spin(&mut spin);
                                 println!(
                                     "{} Screenshot saved at {}",
                                     "[+]".green(),
-                                    outfile.to_string().cyan());
+                                    format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
                             }
                             "[task:shell:ok]" => {
                                 // TODO: Fix garbled characters other than English.

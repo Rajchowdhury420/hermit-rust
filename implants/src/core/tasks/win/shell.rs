@@ -7,7 +7,7 @@ use std::{
     os::windows::ffi::OsStrExt,
 };
 use windows::{
-    core::{Error, PWSTR, HRESULT, PCWSTR},
+    core::{Error, PWSTR, HRESULT, HSTRING, PCWSTR},
     Win32::{
         Foundation::{
             BOOL, CloseHandle, HANDLE,
@@ -65,6 +65,7 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
             return Err(Error::from_win32());
         },
     };
+
     let mut command = OsStr::new(&command).encode_wide().collect::<Vec<_>>();
 
     let inherit_handles = true;

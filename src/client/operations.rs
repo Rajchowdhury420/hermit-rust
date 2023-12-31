@@ -62,7 +62,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                             };
                             let host = match subm2.get_one::<String>("host") {
                                 Some(h) => Some(h.to_string()),
-                                None => Some("127.0.0.1".to_string())
+                                None => Some(client.server_host.to_string())
                             };
                             let listener_option = ListenerOption {
                                 name,
@@ -244,7 +244,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 },
             }
         }
-        Mode::Agent(agent_name) => {
+        Mode::Agent(agent_name, agent_os) => {
             match matches.subcommand() {
                 // Tasks
                 Some(("screenshot", _)) => {
@@ -256,19 +256,36 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 }
                 Some(("shell", subm)) => {
                     op = Operation::AgentTaskShell;
-                    let mut pre = "cmd";
-                    if subm.get_flag("ps") {
-                        pre = "powershell";
-                    }
-                    let command = match subm.get_one::<String>("command") {
-                        Some(c) => { c.to_owned() }
-                        None => { "".to_owned() }
-                    };
 
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        command: Some(pre.to_string() + " " + command.as_str()),
-                    });
+                    match agent_os.as_str() {
+                        "linux" => {
+                            let command = match subm.get_one::<String>("command") {
+                                Some(c) => { c.to_owned() }
+                                None => { "".to_owned() }
+                            };
+
+                            options.task_opt = Some(TaskOption {
+                                agent_name: Some(agent_name.to_owned()),
+                                command: Some(command),
+                            });
+                        }
+                        "windows" | _ => {
+                            let mut pre = "cmd";
+                            if subm.get_flag("ps") {
+                                pre = "powershell";
+                            }
+                            let command = match subm.get_one::<String>("command") {
+                                Some(c) => { c.to_owned() }
+                                None => { "".to_owned() }
+                            };
+        
+                            options.task_opt = Some(TaskOption {
+                                agent_name: Some(agent_name.to_owned()),
+                                command: Some(pre.to_string() + " " + command.as_str()),
+                            });
+                        }
+                    }
+
                 }
                 // Misc
                 Some(("exit", _)) | Some(("quit", _)) => {
