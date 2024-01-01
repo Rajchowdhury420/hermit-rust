@@ -12,9 +12,9 @@ pub struct Implant {
 }
 
 impl Implant {
-    pub fn new(name: String, listener_url: String, os: String, arch: String, format: String, sleep: u16) -> Self {
+    pub fn new(id: u32, name: String, listener_url: String, os: String, arch: String, format: String, sleep: u16) -> Self {
         Self {
-            id: 0, // Temporaly ID. It'll be changed when adding the implant list.
+            id,
             name,
             listener_url,
             os,
@@ -32,14 +32,14 @@ pub fn format_implants(implants: &Vec<Implant>) -> String  {
     }
 
     let mut output = format!(
-        "{:>5} | {:<20} | {:<30} | {:<10} | {:<10} | {:<5} | {:>5}\n",
+        "{:>5} | {:<20} | {:<30} | {:<10} | {:<10} | {:<6} | {:>5}\n",
         "ID", "NAME", "LISTENER", "OS", "ARCH", "FORMAT", "SLEEP",
     );
     output = output + "-".repeat(108).as_str() + "\n";
 
     for implant in implants {
         output = output + format!(
-            "{:>5} | {:<20} | {:<30} | {:<10} | {:<10} | {:<5} | {:>5}\n",
+            "{:>5} | {:<20} | {:<30} | {:<10} | {:<10} | {:<6} | {:>5}\n",
             implant.id.to_owned(),
             implant.name.to_owned(),
             implant.listener_url.to_owned(),

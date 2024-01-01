@@ -28,6 +28,7 @@ hyper-util = { version = "0.1", features = ["tokio", "server-auto", "http1"] }
 log = "0.4.20"
 rand = "0.8.5"
 rustyline = "13.0.0"
+rusqlite = { version = "0.30.0", features = ["bundled"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 shellwords = "1.1.0"

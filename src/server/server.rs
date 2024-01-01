@@ -16,10 +16,14 @@ use tower_http::{
     add_extension::AddExtensionLayer,
     trace::{DefaultMakeSpan, TraceLayer},
 };
+use url::Url;
 
 use super::{
     agents::Agent,
-    jobs::{Job, JobMessage},
+    db,
+    implants::implant::Implant,
+    listeners::listener::Listener,
+    jobs::{find_job, Job, JobMessage},
     handlers::{
         agent::handle_agent,
         implant::handle_implant,
@@ -28,90 +32,147 @@ use super::{
     },
 };
 use crate::{
-    implants::implant::Implant,
     config::Config,
-    utils::fs::{mkdir, mkfile},
+    server::db::DB_PATH,
+    utils::fs::{mkdir, mkfile, exists},
 };
 
 #[derive(Debug)]
 pub struct Server {
     pub config: Config,
-    pub jobs: Arc<Mutex<Vec<Job>>>,
+    pub db: db::DB,
+    pub jobs: Arc<Mutex<Vec<Job>>>,  // Jobs contain listeners
     pub tx_job: Arc<Mutex<broadcast::Sender<JobMessage>>>,
-    pub agents: Arc<Mutex<Vec<Agent>>>,
-    pub implants: Arc<Mutex<Vec<Implant>>>,
 }
 
 impl Server {
     pub fn new(
         config: Config,
+        db: db::DB,
         tx_job: broadcast::Sender<JobMessage>,
     ) -> Self {
         Self {
             config,
+            db,
             jobs: Arc::new(Mutex::new(Vec::new())),
             tx_job: Arc::new(Mutex::new(tx_job)),
-            agents: Arc::new(Mutex::new(Vec::new())),
-            implants: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    pub async fn add_agent(&mut self, new_agent: &mut Agent) -> Result<(), Error> {
-        let mut agents = self.agents.lock().await;
+    pub async fn add_listener(
+        &mut self,
+        name: String,
+        protocol: String,
+        host: String,
+        port: u16,
+        init: bool,
+    ) -> Result<(), Error> {
+        let listener = Listener::new(
+            name.to_string(),
+            protocol.to_string(),
+            host.to_string(),
+            port.to_owned(),
+        );
 
-        // Check if the same agent already exists
-        for agent in agents.iter() {
-            if  agent.hostname == new_agent.hostname &&
-                agent.os == new_agent.os &&
-                agent.arch == new_agent.arch &&
-                agent.listener_url == new_agent.listener_url
+        // Check duplicate in database if not init
+        if !init {
+            match db::exists_listener(
+                self.db.path.to_string(),
+                listener.clone())
             {
-                return Err(Error::new(ErrorKind::Other, "This agent has already registered"));
+                Ok(exists) => {
+                    if exists {
+                        return Err(Error::new(ErrorKind::Other, "Listener already exists."));
+                    }
+                }
+                Err(e) => {
+                    return Err(Error::new(ErrorKind::Other, e.to_string()));
+                }
             }
         }
 
-        // Create a directory and files for the new agent
-        mkdir(format!("agents/{}/task", new_agent.name.to_owned())).unwrap();
-        mkdir(format!("agents/{}/screenshots", new_agent.name.to_owned())).unwrap();
-        mkfile(format!("agents/{}/task/name", new_agent.name.to_owned())).unwrap();
-        mkfile(format!("agents/{}/task/result", new_agent.name.to_owned())).unwrap();
+        // Create a new job
+        let mut jobs_lock = self.jobs.lock().await;
+        let rx_job_lock = self.tx_job.lock().await;
 
-        // Update the agent ID and push
-        new_agent.id = agents.len() as u32;
-        agents.push(new_agent.to_owned());
+        let new_job = Job::new(
+            (jobs_lock.len() + 1) as u32,
+            name.to_owned(),
+            protocol.to_owned(),
+            host.to_owned(),
+            port.to_owned(),
+            Arc::new(Mutex::new(rx_job_lock.subscribe())),
+            self.db.path.to_string(),
+        );
+
+        jobs_lock.push(new_job);
+
+        // Add listener to database
+        db::add_listener(self.db.path.to_string(), &listener).unwrap();
+
         Ok(())
     }
 
-    pub async fn add_implant(&mut self, new_implant: &mut Implant) -> Result<(), Error> {
-        let mut implants = self.implants.lock().await;
+    pub async fn delete_listener(&mut self, listener_name: String) -> Result<(), Error> {
+        let mut jobs = self.jobs.lock().await;
+        let mut jobs_owned = jobs.to_owned();
 
-        // Update the implant ID
-        new_implant.id = implants.len() as u32;
-        implants.push(new_implant.to_owned());
-        Ok(())
-    }
-
-    pub async fn is_dupl_implant(&mut self, new_implant: &mut Implant) -> bool {
-        let implants = self.implants.lock().await;
-
-        // Check if the same implant already exists
-        for implant in implants.iter() {
-            if  implant.listener_url == new_implant.listener_url &&
-                implant.os == new_implant.os &&
-                implant.arch == new_implant.arch &&
-                implant.format == new_implant.format &&
-                implant.sleep == new_implant.sleep
-            {
-                return true;
+        let job = match find_job(&mut jobs_owned, listener_name.to_owned()).await {
+            Some(j) => j,
+            None => {
+                return Err(Error::new(ErrorKind::Other, "Listener not found."));
             }
+        };
+
+        if job.running {
+            return Err(
+                Error::new(
+                    ErrorKind::Other,
+                    "Listener cannot be deleted because it's running. Please stop it before deleting."
+                ));
         }
-        return false;
+
+        job.handle.lock().await.abort();
+        jobs.remove((job.id - 1) as usize);
+
+        // Remove listener from database
+        db::delete_listener(
+            self.db.path.to_string(),
+            job.name.to_string()).unwrap();
+
+        Ok(())
     }
 }
 
 pub async fn run(config: Config) {
+    // Initialize database
+    let db = db::DB::new();
+    let db_path = db.path.to_string();
+
     let (tx_job, _rx_job) = broadcast::channel(100);
-    let server = Arc::new(Mutex::new(Server::new(config, tx_job)));
+    let server = Arc::new(Mutex::new(Server::new(config, db, tx_job)));
+
+    // Load data from database or initialize
+    if exists(db_path.to_string()) {
+        // Load all listeners
+        let all_listeners = db::get_all_listeners(db_path.to_string()).unwrap();
+        if all_listeners.len() > 0 {
+            let mut server_lock = server.lock().await;
+            for listener in all_listeners {
+                let _ = server_lock.add_listener(
+                    listener.name,
+                    listener.protocol,
+                    listener.host,
+                    listener.port,
+                    true,
+                ).await;
+            }
+        }
+    } else {
+        mkfile(DB_PATH.to_string()).unwrap();
+        db::init_db(db_path.to_string()).unwrap();
+    }
+
 
     let app = Router::new()
         .route("/hermit", get(ws_handler))

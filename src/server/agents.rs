@@ -33,6 +33,21 @@ pub struct Agent {
     pub task_result: Option<Vec<u8>>,
 }
 
+impl Agent {
+    pub fn new(id: u32, name: String, hostname: String, os: String, arch: String, listener_url: String) -> Self {
+        Self {
+            id,
+            name,
+            hostname,
+            os,
+            arch,
+            listener_url,
+            task: AgentTask::Empty,
+            task_result: None,
+        }
+    }
+}
+
 pub fn format_agents(agents: &Vec<Agent>) -> String  {
     info!("Getting agent status...");
     if agents.len() == 0 {

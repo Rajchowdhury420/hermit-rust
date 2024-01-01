@@ -3,12 +3,13 @@ use log::info;
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{
+use crate::server::{
+    db,
     implants::{
         generate::generate,
         implant::{format_implants, Implant},
     },
-    server::server::Server,
+    server::Server
 };
 
 pub async fn handle_implant(
@@ -17,7 +18,8 @@ pub async fn handle_implant(
     socket_lock: &mut MutexGuard<'_, WebSocket>,
     server: Arc<Mutex<Server>>,
 ) {
-    let mut server_lock = server.lock().await;
+    let server_lock = server.lock().await;
+    let mut implants = db::get_all_implants(server_lock.db.path.to_string()).unwrap();
 
     match args[1].as_str() {
         "gen" => {
@@ -28,7 +30,8 @@ pub async fn handle_implant(
             let i_format = args[6].to_owned();
             let i_sleep: u16 = args[7].to_owned().parse().unwrap();
 
-            let mut implant = Implant::new(
+            let implant = Implant::new(
+                0, // Temporary ID
                 i_name.to_owned(),
                 i_listener_url.to_owned(),
                 i_os.to_owned(),
@@ -38,7 +41,8 @@ pub async fn handle_implant(
             );
 
             // Check duplicate
-            if server_lock.is_dupl_implant(&mut implant).await {
+            let exists = db::exists_implant(server_lock.db.path.to_string(), implant.clone()).unwrap();
+            if exists {
                 let _ = socket_lock.send(
                     Message::Text(
                         "[implant:gen:error] Similar implant already exists. Please use it with `implant download`.".to_owned()
@@ -65,7 +69,8 @@ pub async fn handle_implant(
                     ).await;
 
                     // Add to the list (check duplicate again before adding it)
-                    if server_lock.is_dupl_implant(&mut implant).await {
+                    let exists = db::exists_implant(server_lock.db.path.to_string(), implant.clone()).unwrap();
+                    if exists {
                         let _ = socket_lock.send(
                             Message::Text(
                                 "[implant:gen:error] Similar implant already exists. Please use it with `implant download`.".to_owned()
@@ -73,11 +78,17 @@ pub async fn handle_implant(
                         let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
                         return;
                     }
-                    if let Err(e) = server_lock.add_implant(&mut implant).await {
-                        let _ = socket_lock.send(
-                            Message::Text(format!("[implant:gen:error] {}", e.to_string()))).await;
-                    }
-                            
+                    match db::add_implant(server_lock.db.path.to_string(), implant.clone()) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            let _ = socket_lock.send(
+                                Message::Text(
+                                    format!("[implant:gen:error] {}", e.to_string())
+                                )).await;
+                            let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                            return;
+                        }
+                    }       
                 },
                 Err(e) => {
                     let _ = socket_lock.send(
@@ -93,8 +104,7 @@ pub async fn handle_implant(
             let i_name = args[2].to_owned();
             // Get the implant
             let mut target_implant: Option<Implant> = None;
-            let implants = server_lock.implants.lock().await;
-            for implant in implants.iter() {
+            for implant in implants {
                 if implant.id.to_string() == i_name || implant.name == i_name {
                     target_implant = Some(implant.to_owned());
                     break;
@@ -138,31 +148,23 @@ pub async fn handle_implant(
             let i_name = args[2].to_owned();
 
             // Remove the implant from the list
-            let mut removed = false;
-            let mut implants = server_lock.implants.lock().await;
-            for (idx, implant) in implants.iter_mut().enumerate() {
-                if implant.id.to_string() == i_name || implant.name == i_name {
-                    implants.remove(idx);
-                    removed = true;
-                    break;
+            match db::delete_implant(server_lock.db.path.to_string(), i_name.to_string()) {
+                Ok(_) => {
+                    let _ = socket_lock.send(
+                        Message::Text(
+                            "[implant:delete:ok] Implant deleted successfully.".to_owned()
+                        )).await;
                 }
-            }
-
-            if removed {
-                let _ = socket_lock.send(
-                    Message::Text(
-                        "[implant:delete:ok] Implant deleted successfully.".to_owned()
-                    )).await;
-            } else {
-                let _ = socket_lock.send(
-                    Message::Text(
-                        "[implant:delete:error] Implant could not be delete.".to_owned()
-                    )).await;
+                Err(_) => {
+                    let _ = socket_lock.send(
+                        Message::Text(
+                            "[implant:delete:error] Implant could not be delete.".to_owned()
+                        )).await;
+                }
             }
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
         }
         "list" => {
-            let mut implants = server_lock.implants.lock().await;
             let output = format_implants(&mut implants);
             let _ = socket_lock.send(Message::Text(output)).await;
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;

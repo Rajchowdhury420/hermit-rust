@@ -1,11 +1,11 @@
 use axum::extract::ws::{Message, WebSocket};
-use log::error;
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 use url::Url;
 
 use crate::server::{
-    jobs::{check_dupl_job, find_job, format_listeners, Job, JobMessage},
+    db,
+    jobs::{find_job, format_listeners, JobMessage},
     server::Server,
 };
 
@@ -14,66 +14,39 @@ pub async fn handle_listener(
     socket_lock: &mut MutexGuard<'_, WebSocket>,
     server: Arc<Mutex<Server>>,
 ) {
-    let server_lock = server.lock().await;
+    let mut server_lock = server.lock().await;
 
     match args[1].as_str() {
         "add" => {
             let name = &args[2];
             let url = Url::parse(&args[3]).unwrap();
 
-            let mut jobs = server_lock.jobs.lock().await;
-
-            // Check if the url already exists.
-            match check_dupl_job(&mut jobs, url.to_owned()) {
-                Ok(_) => {},
+            match server_lock.add_listener(
+                name.to_string(),
+                url.scheme().to_string(),
+                url.host().unwrap().to_string(),
+                url.port().unwrap().to_owned(),
+                false,
+            ).await {
+                Ok(_) => {
+                    let _ = socket_lock.send(Message::Text("Listener added.".to_owned())).await;
+                },
                 Err(e) => {
-                    error!("{e}");
-                    let _ = socket_lock.send(Message::Text(format!("Error: This URL already exists."))).await;
-                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                    return;
+                    let _ = socket_lock.send(Message::Text(e.to_string())).await;
                 },
             }
-
-            let next_id = jobs.len() as u32;
-            let rx_job = server_lock.tx_job.lock().await;
-
-            let new_job = Job::new(
-                next_id,
-                name.to_owned(),
-                url.scheme().to_owned(),
-                url.host().unwrap().to_string(),
-                url.port().unwrap(),
-                Arc::new(Mutex::new(rx_job.subscribe())),
-                Arc::clone(&server),
-            );
-
-            jobs.push(new_job);
-            let _ = socket_lock.send(Message::Text(format!("Listener `{url}` added."))).await;
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
         }
         "delete" => {
-            let target = args[2].to_string();
+            let name = args[2].to_string();
 
-            let mut jobs = server_lock.jobs.lock().await;
-            let mut jobs_owned = jobs.to_owned();
-
-            let job = match find_job(&mut jobs_owned, target.to_owned()).await {
-                Some(j) => j,
-                None => {
-                    let _ = socket_lock.send(Message::Text(format!("Listener `{target}` not found."))).await;
-                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                    return;
+            match server_lock.delete_listener(name.to_string()).await {
+                Ok(_) => {
+                    let _ = socket_lock.send(Message::Text("Listener deleted.".to_owned())).await;
+                },
+                Err(e) => {
+                    let _ = socket_lock.send(Message::Text(e.to_string())).await;
                 }
-            };
-
-            if !job.running {
-                job.handle.lock().await.abort();
-                jobs.remove(job.id as usize);
-                let _ = socket_lock.send(Message::Text(format!("Listener `{target}` deleted."))).await;
-            } else {
-                let _ = socket_lock.send(
-                    Message::Text(format!("Listener `{target}` cannot be deleted because it's running. Please stop it before deleting."))
-                ).await;
             }
 
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;

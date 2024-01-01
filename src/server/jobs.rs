@@ -1,12 +1,18 @@
 use colored::Colorize;
 use log::info;
-use url::Url;
-use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex};
+use std::{
+    io::{Error, ErrorKind},
+    sync::Arc
+};
+use tokio::sync::{broadcast, Mutex, MutexGuard};
 use tokio::task::JoinHandle;
+use url::Url;
 
 use super::server::Server;
-use super::listeners::http::start_http_listener;
+use super::listeners::{
+    http::start_http_listener,
+    listener::Listener,
+};
 
 #[derive(Clone, Debug)]
 pub enum JobMessage {
@@ -35,7 +41,7 @@ impl Job {
         host: String,
         port: u16,
         rx_job: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
-        server: Arc<Mutex<Server>>,
+        db_path: String,
     ) -> Self {
 
         let (tx_listener, rx_listener) = broadcast::channel(100);
@@ -44,6 +50,7 @@ impl Job {
         let rx_listener = Arc::new(Mutex::new(rx_listener));
         
         let host_clone = host.clone();
+        let db_path_clone = db_path.clone();
         
         let handle = tokio::spawn(async move {
             let mut rx_job = rx_job.lock().await;
@@ -54,8 +61,7 @@ impl Job {
                 let rx_listener_clone = Arc::clone(&rx_listener);
                 let host_clone = host_clone.clone();
                 let port_clone = port.clone();
-
-                let server_clone = Arc::clone(&server);
+                let db_path_clone = db_path_clone.clone();
 
                 if let Ok(msg) = rx_job.recv().await {
                     match msg  {
@@ -69,7 +75,7 @@ impl Job {
                                             host_clone.to_string(),
                                             port_clone,
                                             rx_listener_clone,
-                                            server_clone,
+                                            db_path_clone,
                                         ).await;
                                     });
                                 } else {
@@ -113,19 +119,6 @@ pub async fn find_job(jobs: &mut Vec<Job>, target: String) -> Option<&mut Job> {
         }
     }
     None
-}
-
-pub fn check_dupl_job(jobs: &mut Vec<Job>, url: Url) -> Result<(), std::io::ErrorKind> {
-    let proto = url.scheme().to_string();
-    let host = url.host().unwrap().to_string();
-    let port = url.port().unwrap().to_owned();
-
-    for job in jobs.iter() {
-        if job.protocol == proto && job.host == host && job.port == port {
-            return Err(std::io::ErrorKind::AlreadyExists);
-        }
-    }
-    Ok(())
 }
 
 pub fn format_listeners(jobs: &Vec<Job>) -> String  {

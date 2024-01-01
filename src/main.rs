@@ -5,15 +5,16 @@ use log::warn;
 pub mod banner;
 pub mod client;
 pub mod config;
-pub mod implants;
 pub mod server;
 pub mod utils;
 
-use crate::banner::banner;
-use crate::client::client::Client;
-use crate::config::Config;
-use crate::server::server::run as run_server;
-use crate::utils::fs::mkdir;
+use crate::{
+    banner::banner,
+    client::client::Client,
+    config::Config,
+    server::server::run as run_server,
+    utils::fs::mkdir,
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -62,7 +63,7 @@ async fn main() {
     match &cli.command {
         Some(Commands::Client { host, port }) => {
             mkdir("client".to_string()).unwrap();
-
+            
             banner("client");
             let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
         },
