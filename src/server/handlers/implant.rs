@@ -53,7 +53,6 @@ pub async fn handle_implant(
 
             // Generate an implant
             match generate(
-                &server_lock.config,
                 i_name.to_owned(),
                 i_listener_url.to_owned(),
                 i_os.to_owned(),
@@ -113,7 +112,6 @@ pub async fn handle_implant(
 
             if let Some(imp) = target_implant {
                 match generate(
-                    &server_lock.config,
                     imp.name,
                     imp.listener_url,
                     imp.os,

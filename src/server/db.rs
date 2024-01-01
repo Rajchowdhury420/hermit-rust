@@ -7,6 +7,7 @@ pub use agents::{
     add_agent,
     delete_agent,
     exists_agent,
+    get_agent,
     get_all_agents,
     update_agent_name,
 };

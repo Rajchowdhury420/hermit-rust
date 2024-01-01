@@ -14,7 +14,7 @@ pub async fn handle_task(
     socket_lock: &mut MutexGuard<'_, WebSocket>,
     server: Arc<Mutex<Server>>,
 ) {
-    let server_lock = server.lock().await;
+    // let server_lock = server.lock().await;
 
     let ag_name = args[1].to_owned();
 

