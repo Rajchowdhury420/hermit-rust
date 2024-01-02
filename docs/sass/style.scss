@@ -1,0 +1,347 @@
+$mq-breakpoints: (
+    xl: 1440px,
+    lg: 1280px,
+    md: 1024px,
+    tb: 768px,
+    sm: 576px,
+    xs: 414px) !default;
+
+// Media Queryの設定
+@mixin mq($breakpoint: md, $rule: min, $subtraction: false) {
+    $breakpoint: map_get($mq-breakpoints, $breakpoint);
+
+    @if $rule==max and $subtraction {
+        $breakpoint: $breakpoint - 0.0625;
+    }
+
+    @media screen and (#{$rule}-width: $breakpoint) {
+        @content;
+    }
+}
+
+:root {
+    // Colors
+    --color-dark: #2b2b29;
+    --color-light: #b5b6bd;
+    --color-red: #ea4080;
+    --color-black: #020200;
+
+    // fonts
+    --font-main: 'Montserrat', sans-serif;
+}
+
+html,body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+body {
+    background-color: var(--color-dark);
+    color: var(--color-light);
+    font-family: var(--font-main);
+}
+
+p {
+    line-height: 1.8em;
+}
+
+a {
+    color: var(--color-light);
+    
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+ul {
+    padding-left: 18px;
+
+    li {
+        margin: 8px 0;
+    }
+}
+
+hr {
+    width: 100%;
+    border-bottom: 1px solid var(--color-light);
+}
+
+pre {
+    margin: 16px auto;
+    max-width: calc(100vw - 60px);
+    overflow-x: auto;
+    padding: 12px;
+    background-color: var(--color-black)!important;
+    
+    code {
+        line-height: 1.4em;
+        font-size: 1.2em;
+    }
+}
+
+ul li code, p code {
+    padding: 2px 4px;
+    background-color: var(--color-black);
+    font-size: 1.2em;
+    color: var(--color-red);
+}
+
+header {
+    position: fixed;
+    top: 0;
+    z-index: 50;
+    width: 100vw;
+    background-color: var(--color-light);
+    padding: 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+
+    #title {
+        text-decoration: none;
+        font-size: 1.2em;
+        font-weight: bold;
+        color: var(--color-dark);
+    }
+
+    nav {
+        display: none;
+    
+        @include mq(sm) {
+            display: flex;
+            align-items: center;
+        }
+        
+        a {
+            margin: 0 8px;
+            font-size: 1em;
+            color: var(--color-dark);
+            text-decoration: none;
+            font-weight: bold;
+        }
+    }
+}
+
+.section {
+    width: 100vw;
+    margin-top: 120px;
+
+    .container {
+        width: 100vw;
+    }
+}
+
+.home {
+    margin: 48px auto;
+    width: 95%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    @include mq(sm) {
+        margin: 72px auto;
+        width: 60%;
+    }
+
+    @include mq(md) {
+        width: 480px;
+    }
+
+    .instruction {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+
+        h1 {
+            margin: 12px 0;
+            font-size: 2em;
+        }
+
+        p {
+            margin: 6px 0;
+            font-size: 1.2em;
+            text-align: center;
+            line-height: 1.6em;
+        }
+
+        img {
+            margin-top: 24px;
+            width: 60%;
+
+            @include mq(sm) {
+                width: 50%;
+            }
+        }
+    }
+
+    .quick-links {
+        margin-top: 32px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        @include mq(sm) {
+            flex-direction: row;
+        }
+
+        a {
+            margin: 12px 0;
+            width: 100%;
+            background-color: var(--color-light);
+            border-radius: 36px;
+            padding: 10px 14px;
+            text-align: center;
+            color: var(--color-dark);
+            font-weight: bold;
+            font-size: 1.2em;
+            text-decoration: none;
+
+            @include mq(sm) {
+                margin: 0 6px;
+                width: initial;
+            }
+        }
+    }
+}
+
+.docs {
+    margin: 28px auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    @include mq(sm) {
+        margin: 48px auto;
+        width: 50%;
+    }
+
+    @include mq(md) {
+        width: 40%;
+    }
+
+    h1 {
+        font-size: 2em;
+    }
+}
+
+.doc {
+    margin: 28px auto;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: center;
+
+    @include mq(sm) {
+        margin: 48px auto;
+        width: 90%;
+        grid-template-columns: 1fr 50% 1fr;
+
+    }
+
+    @include mq(md) {
+        width: 80%;
+    }
+
+    .pages {
+        position: relative;
+        display: none;
+        padding: 0 24px;
+        height: 100vh;
+
+        @include mq(sm) {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .wrapper {
+            position: fixed;
+            display: flex;
+            flex-direction: column;
+
+            a {
+                margin: 5px 0;
+                font-size: 0.95em;
+                font-weight: bold;
+                text-decoration: none;
+
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+        }
+
+    }
+
+    .content {
+        flex-grow: 1;
+        padding: 0 28px;
+
+        .title {
+            margin: 0;
+            font-size: 2em;
+        }
+
+        img {
+            width: 100%;
+        }
+    }
+
+    .toc {
+        position: relative;
+        display: none;
+        height: 100vh;
+        padding: 0 24px;
+
+        @include mq(sm) {
+            display: flex;
+            flex-direction: column;
+        }
+
+        
+        .wrapper {
+            position: fixed;
+            display: flex;
+            flex-direction: column;
+
+            .headtxt {
+                text-align: center;
+            }
+
+            .wrapper1 {
+                display: flex;
+                flex-direction: column;
+    
+                .wrapper2 {
+                    margin: 4px 0;
+                    display: flex;
+                    flex-direction: column;
+    
+                    a {
+                        margin: 4px;
+                        font-weight: bold;
+                        font-size: 0.95em;
+                        text-decoration: none;
+    
+                        &:hover {
+                            text-decoration: underline;
+                        }
+                    }
+
+                    .wrapper3 {
+                        margin: 4px 0 4px 10px;
+
+                        a {
+                            font-weight: normal;
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+}

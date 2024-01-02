@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="doc">
+    <div class="pages">
+        <div class="wrapper">
+            <a href="{{ get_url(path='@/docs/overview.md') }}">Overview</a>
+            <a href="{{ get_url(path='@/docs/getting-started.md') }}">Gettint Started</a>
+            <a href="{{ get_url(path='@/docs/prerequisites.md') }}">Prerequisites</a>
+            <a href="{{ get_url(path='@/docs/installation.md') }}">Installation</a>
+            <hr />
+            <a href="{{ get_url(path='@/docs/c2-server.md') }}">C2 Server</a>
+            <a href="{{ get_url(path='@/docs/c2-client.md') }}">C2 Client</a>
+        </div>
+    </div>
+
+    <div class="content">
+        <h1 class="title">
+            {{ page.title }}
+        </h1>
+        <br />
+        {{ page.content | safe }}
+    </div>
+    
+    <!-- Table of Contents -->
+    <div class="toc">
+        <div class="wrapper">
+            <span class="headtxt">Table of Contents</span>
+            <hr />
+            {% if page.toc %}
+                <div class="wrapper1">
+                {% for h2 in page.toc %}
+                    <div class="wrapper2">
+                        <a href="{{ h2.permalink | safe }}">{{ h2.title }}</a>
+                        {% if h2.children %}
+                                {% for h3 in h2.children %}
+                                    <div class="wrapper3">
+                                        <a href="{{ h3.permalink | safe }}">{{ h3.title }}</a>
+                                    </div>
+                                {% endfor %}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock content %}

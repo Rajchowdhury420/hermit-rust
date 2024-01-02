@@ -1,0 +1,40 @@
+# The URL the site will be built for
+base_url = "https://hermit.hdks.org"
+
+title = "Hermit C2"
+description = "A post-exploitation, command and control framework written in Rust."
+
+default_language = "en"
+
+# theme = ""
+
+output_dir = "public"
+
+# Whether to automatically compile all Sass files in the sass directory
+compile_sass = true
+
+minify_html = true
+
+ignored_content = []
+ignored_static = []
+
+# Whether to build a search index to be used later on by a JavaScript library
+build_search_index = true
+
+[markdown]
+highlight_code = true
+# extra_syntaxes_and_themes = []
+highlight_theme = "base16-ocean-dark"
+render_emoji = true
+
+external_links_target_blank = true
+external_links_no_referrer = true
+
+[search]
+include_title = true
+include_description = true
+include_path = false
+include_content = true
+index_format = "elasticlunr_javascript"
+
+[extra]
