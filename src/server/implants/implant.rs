@@ -32,19 +32,18 @@ pub fn format_implants(implants: &Vec<Implant>) -> String  {
     }
 
     let mut output = format!(
-        "{:>5} | {:<20} | {:<30} | {:<10} | {:<10} | {:<6} | {:>5}\n",
-        "ID", "NAME", "LISTENER", "OS", "ARCH", "FORMAT", "SLEEP",
+        "{:>5} | {:<20} | {:<30} | {:<18} | {:<6} | {:>5}\n",
+        "ID", "NAME", "LISTENER", "OS", "FORMAT", "SLEEP",
     );
     output = output + "-".repeat(108).as_str() + "\n";
 
     for implant in implants {
         output = output + format!(
-            "{:>5} | {:<20} | {:<30} | {:<10} | {:<10} | {:<6} | {:>5}\n",
+            "{:>5} | {:<20} | {:<30} | {:<18} | {:<6} | {:>5}\n",
             implant.id.to_owned(),
             implant.name.to_owned(),
             implant.listener_url.to_owned(),
-            implant.os.to_owned(),
-            implant.arch.to_owned(),
+            format!("{}/{}", implant.os.to_owned(), implant.arch.to_owned()),
             implant.format.to_owned(),
             implant.sleep.to_owned(),
         ).as_str();

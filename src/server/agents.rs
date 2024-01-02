@@ -1,6 +1,8 @@
 use log::info;
 use serde::{Deserialize, Serialize};
 
+use super::crypto::aesgcm::decode_decrypt;
+
 #[derive(Deserialize)]
 pub struct AgentData {
     pub name: String,
@@ -13,6 +15,55 @@ pub struct AgentData {
     pub nonce: String,
 
     pub task_result: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct AgentDataEnc {
+    pub a: String, // name
+    pub b: String, // hostname
+    pub c: String, // os
+    pub d: String, // arch
+    pub e: String, // listener_url
+    
+    pub f: String, // key
+    pub g: String, // nonce
+
+    pub h: String, // task_result
+}
+
+
+pub fn dec_agentdataenc(ade: AgentDataEnc) -> AgentData {
+    // Decode and decrypt
+    let key = ade.f.clone();
+    let nonce = ade.g.clone();
+
+    let name = decode_decrypt(ade.a.as_bytes(), key.as_bytes(), nonce.as_bytes());
+    let hostname = decode_decrypt(ade.b.as_bytes(), key.as_bytes(), nonce.as_bytes());
+    let os = decode_decrypt(ade.c.as_bytes(), key.as_bytes(), nonce.as_bytes());
+    let arch = decode_decrypt(ade.d.as_bytes(), key.as_bytes(), nonce.as_bytes());
+    let listener_url = decode_decrypt(ade.e.as_bytes(), key.as_bytes(), nonce.as_bytes());
+    let task_result_tmp = decode_decrypt(ade.h.as_bytes(), key.as_bytes(), nonce.as_bytes());
+
+    let task_result: Option<Vec<u8>> = match String::from_utf8(task_result_tmp.clone()) {
+        Ok(tr_string) => {
+            match tr_string.as_str() {
+                "none" => None,
+                _ => Some(tr_string.as_bytes().to_vec()),
+            }
+        }
+        Err(_) => Some(task_result_tmp),
+    };
+
+    AgentData {
+        name: String::from_utf8(name).unwrap(),
+        hostname: String::from_utf8(hostname).unwrap(),
+        os: String::from_utf8(os).unwrap(),
+        arch: String::from_utf8(arch).unwrap(),
+        listener_url: String::from_utf8(listener_url).unwrap(),
+        key: key.to_owned(),
+        nonce: nonce.to_owned(),
+        task_result,
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -75,7 +126,7 @@ pub fn format_agents(agents: &Vec<Agent>) -> String  {
         "{:>5} | {:<20} | {:<20} | {:<15} | {:<20} | {:<20} | {:<20}\n",
         "ID", "NAME", "HOSTNAME", "OS", "LISTENER", "KEY", "NONCE",
     );
-    output = output + "-".repeat(96).as_str() + "\n";
+    output = output + "-".repeat(128).as_str() + "\n";
 
     for agent in agents {
         output = output + format!(

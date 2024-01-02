@@ -36,3 +36,13 @@ pub fn encode(input: &[u8]) -> String {
 pub fn decode(input: &[u8]) -> Vec<u8> {
     HEXLOWER.decode(input.as_ref()).unwrap()
 }
+
+pub fn encrypt_encode(plaintext: &[u8], key: &[u8], nonce: &[u8]) -> String {
+    let encrypted = encrypt(plaintext, key, nonce).unwrap();
+    encode(&encrypted)
+}
+
+pub fn decode_decrypt(decoded_ct: &[u8], key: &[u8], nonce: &[u8]) -> Vec<u8> {
+    let decoded = decode(decoded_ct);
+    decrypt(&decoded, key, nonce).unwrap()
+}

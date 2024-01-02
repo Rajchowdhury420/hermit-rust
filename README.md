@@ -12,7 +12,7 @@ It's prohibited to use on systems not under your control.
 
 <br />
 
-## Prerequisites
+## PREREQUISITES
 
 ### C2 Server
 
@@ -77,7 +77,7 @@ Hermit [agent: agent_0123456] $ shell whoami
 
 <br />
 
-## Installation
+## INSTALLATION
 
 ```sh
 git clone https://github.com/hideckies/hermit.git

