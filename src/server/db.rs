@@ -9,7 +9,7 @@ pub use agents::{
     exists_agent,
     get_agent,
     get_all_agents,
-    update_agent_name,
+    // update_agent,
 };
 
 mod implants;
@@ -19,6 +19,16 @@ pub use implants::{
     delete_implant,
     exists_implant,
     get_all_implants,
+};
+
+mod keypair;
+pub use keypair::{
+    init_keypair,
+    add_keypair,
+    exists_keypair,
+    delete_all_keypair,
+    get_keypair,
+    update_keypair,
 };
 
 mod listeners;

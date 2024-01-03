@@ -11,18 +11,6 @@ pub struct HInternet {
 unsafe impl Send for HInternet {}
 
 impl Drop for HInternet {
-    // fn drop(&mut self) {
-    //     if self.handle.is_null() {
-    //         return;
-    //     }
-    //     let result = unsafe { WinHttpCloseHandle(self.handle) };
-    //     if result.is_err() {
-    //         let e = Error::from_win32();
-    //         assert!(e.code().is_ok(), "Error: {}", e);
-    //     }
-    //     self.handle = std::ptr::null_mut();
-    // }
-
     fn drop(&mut self) {
         self.close();
     }
@@ -47,8 +35,8 @@ pub struct HSession {
 }
 
 impl HSession {
-    pub fn new() -> Result<HSession, Error> {
-        let hi = open_session()?;
+    pub fn new(user_agent: HSTRING) -> Result<HSession, Error> {
+        let hi = open_session(user_agent)?;
         Ok(HSession { h: hi })
     }
 }
@@ -214,10 +202,10 @@ impl HRequest {
     }
 }
 
-fn open_session() -> Result<HInternet, Error> {
+fn open_session(user_agent: HSTRING) -> Result<HInternet, Error> {
     let handle = unsafe {
         WinHttpOpen(
-            &HSTRING::from("Hermit".to_string()),
+            &user_agent,
             WINHTTP_ACCESS_TYPE_NO_PROXY,
             &HSTRING::new(),
             &HSTRING::new(),

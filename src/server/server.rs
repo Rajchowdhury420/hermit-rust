@@ -16,12 +16,10 @@ use tower_http::{
     add_extension::AddExtensionLayer,
     trace::{DefaultMakeSpan, TraceLayer},
 };
-use url::Url;
 
 use super::{
-    agents::Agent,
+    crypto::aesgcm,
     db,
-    implants::implant::Implant,
     listeners::listener::Listener,
     jobs::{find_job, Job, JobMessage},
     handlers::{
@@ -34,7 +32,7 @@ use super::{
 use crate::{
     config::Config,
     server::db::DB_PATH,
-    utils::fs::{mkdir, mkfile, exists},
+    utils::fs::{mkfile, exists},
 };
 
 #[derive(Debug)]
@@ -171,6 +169,22 @@ pub async fn run(config: Config) {
     } else {
         mkfile(DB_PATH.to_string()).unwrap();
         db::init_db(db_path.to_string()).unwrap();
+    }
+
+    // Generate kaypair if they don't exist yet in database
+    let keypair_exists = match db::exists_keypair(db_path.to_string()) {
+        Ok(exists) => exists,
+        Err(e) => {
+            error!("Error: {}", e.to_string());
+            return;
+        }
+    };
+    if !keypair_exists {
+        let (secret, public) = aesgcm::generate_keypair();
+        let encoded_secret = aesgcm::encode(secret.as_bytes());
+        let encoded_public = aesgcm::encode(public.as_bytes());
+
+        db::add_keypair(db_path.to_string(), encoded_secret, encoded_public);
     }
 
 

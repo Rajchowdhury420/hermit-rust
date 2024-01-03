@@ -4,6 +4,7 @@ use crate::utils::fs::get_app_dir;
 use super::{
     agents::init_agents,
     implants::init_implants,
+    keypair::init_keypair,
     listeners::init_listeners,
 };
 
@@ -26,6 +27,7 @@ impl DB {
 pub fn init_db(db_path: String) -> Result<()> {
     init_listeners(db_path.to_owned())?;
     init_agents(db_path.to_owned())?;
+    init_keypair(db_path.to_owned())?;
     init_implants(db_path.to_owned())?;
 
     Ok(())
