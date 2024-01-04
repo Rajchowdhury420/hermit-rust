@@ -7,6 +7,7 @@ use url::Url;
 
 use crate::{
     server::{
+        certs::https::create_client_certs,
         crypto::aesgcm::{encode, generate_keypair},
         db,
     },
@@ -48,6 +49,20 @@ pub fn generate(
         }
     };
 
+    // If the protocol is `https`, set the certificates values (root cert, client certs)
+    let mut https_root_cert = String::new();
+    let mut https_client_cert = String::new();
+    let mut https_client_key = String::new();
+    if proto == "https" {
+        // Get the root CA cert only (not the private key)
+        let root_cert = read_file("server/root_cert.pem".to_string()).unwrap();
+        https_root_cert = String::from_utf8(root_cert).unwrap();
+        (https_client_cert, https_client_key) = create_client_certs();
+    }
+    env::set_var("HERMIT_HTTPS_ROOT_CERT", https_root_cert.to_string());
+    env::set_var("HERMIT_HTTPS_CLIENT_CERT", https_client_cert.to_string());
+    env::set_var("HERMIT_HTTPS_CLIENT_KEY", https_client_key.to_string());
+    
     // Set environment variables for `config.rs` when building an implant.
     env::set_var("HERMIT_LPROTO", proto.to_string());
     env::set_var("HERMIT_LHOST", host.to_string());

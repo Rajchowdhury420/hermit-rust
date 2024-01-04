@@ -140,8 +140,9 @@ impl Client {
                             // Listener
                             Operation::AddListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
-                                    message = Message::Text(format!("listener add {} {}://{}:{}/",
+                                    message = Message::Text(format!("listener add {} {} {}://{}:{}/",
                                         listener_opt.name.unwrap(),
+                                        listener_opt.hostnames.unwrap().join(","),
                                         listener_opt.proto.unwrap(),
                                         listener_opt.host.unwrap(),
                                         listener_opt.port.unwrap()));

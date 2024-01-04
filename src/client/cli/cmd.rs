@@ -22,7 +22,7 @@ pub fn create_cmd(client: &Client) -> Command {
                         .args([
                             Arg::new("protocol")
                                 .help("Protocol")
-                                .default_value("http")
+                                .default_value("https")
                                 .value_parser(value_parser!(String)),
                             Arg::new("host")
                                 .short('H')
@@ -33,12 +33,17 @@ pub fn create_cmd(client: &Client) -> Command {
                                 .short('P')
                                 .long("port")
                                 .help("Port")
-                                .required(true)
+                                .default_value("4443")
                                 .value_parser(value_parser!(u16)),
                             Arg::new("name")
                                 .short('n')
                                 .long("name")
                                 .help("Specify the name of a listener")
+                                .value_parser(value_parser!(String)),
+                            Arg::new("hostnames")
+                                .long("hostnames")
+                                .help("Specify the hostnames for the HTTPS certificates")
+                                .default_value("localhost")
                                 .value_parser(value_parser!(String)),
                         ])
                     )
@@ -105,7 +110,7 @@ pub fn create_cmd(client: &Client) -> Command {
                                 .short('l')
                                 .long("listener")
                                 .help("Listener URL that an agent connect to")
-                                .default_value("http://127.0.0.1:8000/")
+                                .default_value("https://127.0.0.1:4443/")
                                 .value_parser(value_parser!(String)),
                             Arg::new("os")
                                 .short('o')
@@ -154,7 +159,6 @@ pub fn create_cmd(client: &Client) -> Command {
                 )
         }
         Mode::Agent(_, _) => {
-            // Inspired by: https://havocframework.com/docs/agent
             cmd
                 .subcommand(Command::new("exit")
                     .about("Exit the agent mode.")

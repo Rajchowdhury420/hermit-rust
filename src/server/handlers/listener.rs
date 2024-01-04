@@ -19,10 +19,12 @@ pub async fn handle_listener(
     match args[1].as_str() {
         "add" => {
             let name = &args[2];
-            let url = Url::parse(&args[3]).unwrap();
+            let hostnames: Vec<String> = args[3].split(",").map(|s| s.to_string()).collect();
+            let url = Url::parse(&args[4]).unwrap();
 
             match server_lock.add_listener(
                 name.to_string(),
+                hostnames,
                 url.scheme().to_string(),
                 url.host().unwrap().to_string(),
                 url.port().unwrap().to_owned(),

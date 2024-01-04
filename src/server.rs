@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod certs;
 pub mod crypto;
 pub mod db;
 pub mod handlers;

@@ -14,6 +14,7 @@ pub fn init_listeners(db_path: String) -> Result<()> {
     db.execute(
         "CREATE TABLE listeners (
             name        TEXT NOT NULL,
+            hostnames   TEXT NOT NULL,
             protocol    TEXT NOT NULL,
             host        TEXT NOT NULL,
             port        INTEGER NOT NULL
@@ -44,9 +45,10 @@ pub fn add_listener(db_path: String, listener: &Listener) -> Result<()> {
     }
 
     db.execute(
-        "INSERT INTO listeners (name, protocol, host, port) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO listeners (name, hostnames, protocol, host, port) VALUES (?1, ?2, ?3, ?4, ?5)",
         (
             listener.name.to_owned(),
+            listener.hostnames.to_owned().join(","),
             listener.protocol.to_owned(),
             listener.host.to_owned(),
             listener.port.to_owned()
@@ -101,14 +103,18 @@ pub fn get_all_listeners(db_path: String) -> Result<Vec<Listener>> {
     };
 
     let mut stmt = db.prepare(
-        "SELECT name, protocol, host, port FROM listeners"
+        "SELECT name, hostnames, protocol, host, port FROM listeners"
     )?;
     let listener_iter = stmt.query_map([], |row| {
+        let hostnames_string: String = row.get(1)?;
+        let hostnames: Vec<String> = hostnames_string.split(",").map(|s| s.to_string()).collect();
+
         Ok(Listener::new(
             row.get(0)?,
-            row.get(1)?,
+            hostnames,
             row.get(2)?,
             row.get(3)?,
+            row.get(4)?,
         ))
     })?;
 

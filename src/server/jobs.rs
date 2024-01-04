@@ -1,16 +1,14 @@
 use colored::Colorize;
 use log::info;
 use std::{
-    io::{Error, ErrorKind},
     sync::Arc
 };
-use tokio::sync::{broadcast, Mutex, MutexGuard};
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
-use url::Url;
 
-use super::server::Server;
 use super::listeners::{
     http::start_http_listener,
+    https::start_https_listener,
     listener::Listener,
 };
 
@@ -24,10 +22,7 @@ pub enum JobMessage {
 #[derive(Clone, Debug)]
 pub struct Job {
     pub id: u32,
-    pub name: String,
-    pub protocol: String,
-    pub host: String,
-    pub port: u16,
+    pub listener: Listener,
     pub running: bool,
 
     pub handle: Arc<Mutex<JoinHandle<JobMessage>>>,
@@ -36,10 +31,7 @@ pub struct Job {
 impl Job {
     pub fn new(
         id: u32,
-        name: String,
-        protocol: String,
-        host: String,
-        port: u16,
+        listener: Listener,
         rx_job: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
         db_path: String,
     ) -> Self {
@@ -49,7 +41,8 @@ impl Job {
         let tx_listener = Arc::new(Mutex::new(tx_listener));
         let rx_listener = Arc::new(Mutex::new(rx_listener));
         
-        let host_clone = host.clone();
+        let name_clone = listener.name.clone();
+        let host_clone = listener.host.clone();
         let db_path_clone = db_path.clone();
         
         let handle = tokio::spawn(async move {
@@ -59,8 +52,9 @@ impl Job {
             loop {
                 let tx_listener_clone = Arc::clone(&tx_listener);
                 let rx_listener_clone = Arc::clone(&rx_listener);
+                let name_clone = name_clone.clone();
                 let host_clone = host_clone.clone();
-                let port_clone = port.clone();
+                let port_clone = listener.port.clone();
                 let db_path_clone = db_path_clone.clone();
 
                 if let Ok(msg) = rx_job.recv().await {
@@ -70,8 +64,16 @@ impl Job {
                                 if !running {
                                     running = true;
                                     tokio::spawn(async move {
-                                        start_http_listener(
+                                        // start_http_listener(
+                                        //     job_id,
+                                        //     host_clone.to_string(),
+                                        //     port_clone,
+                                        //     rx_listener_clone,
+                                        //     db_path_clone,
+                                        // ).await;
+                                        start_https_listener(
                                             job_id,
+                                            name_clone.to_string(),
                                             host_clone.to_string(),
                                             port_clone,
                                             rx_listener_clone,
@@ -102,10 +104,7 @@ impl Job {
 
         Self {
             id,
-            name,
-            protocol,
-            host,
-            port,
+            listener: listener.clone(),
             running: false,
             handle: Arc::new(Mutex::new(handle)),
         }
@@ -114,7 +113,7 @@ impl Job {
 
 pub async fn find_job(jobs: &mut Vec<Job>, target: String) -> Option<&mut Job> {
     for job in jobs.iter_mut() {
-        if job.id.to_string() == target || job.name == target {
+        if job.id.to_string() == target || job.listener.name == target {
             return Some(job);
         }
     }
@@ -127,17 +126,18 @@ pub fn format_listeners(jobs: &Vec<Job>) -> String  {
         return String::from("No listeners found.");
     }
 
-    let mut output = format!("{:>5} | {:<20} | {:<32} | {:15}\n", "ID", "NAME", "URL", "STATUS");
-    output = output + "-".repeat(96).as_str() + "\n";
+    let mut output = format!("{:>5} | {:<20} | {:<20} | {:<32} | {:15}\n", "ID", "NAME", "HOSTS", "URL", "STATUS");
+    output = output + "-".repeat(100).as_str() + "\n";
 
     for job in jobs {
-        output = output + format!("{:>5} | {:<20} | {:<32} | {:15}\n",
+        output = output + format!("{:>5} | {:<20} | {:<20} | {:<32} | {:15}\n",
             job.id.to_string(),
-            job.name.to_string(),
+            job.listener.name.to_string(),
+            job.listener.hostnames.to_owned().join(","),
             format!("{}://{}:{}/",
-                job.protocol.to_string(),
-                job.host.to_string(),
-                job.port.to_string()),
+                job.listener.protocol.to_string(),
+                job.listener.host.to_string(),
+                job.listener.port.to_string()),
             if job.running == true { "active".to_string().green() } else { "inactive".to_string().red() },
         ).as_str();
     }

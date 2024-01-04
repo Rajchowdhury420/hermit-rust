@@ -1,6 +1,7 @@
 use reqwest::header::{HeaderMap, USER_AGENT};
 use std::{
     collections::HashMap,
+    fs::File,
     io::{self, Write},
     thread,
     time,
@@ -49,8 +50,21 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         config.my_public_key,
     );
 
-    // Initialize client
-    let mut client = reqwest::Client::new();
+    // Initialize client with certificates
+    let root_cert = reqwest::Certificate::from_pem(config.listener.https_root_cert.as_bytes()).unwrap();
+    let client_certs = [
+        config.listener.https_client_cert,
+        config.listener.https_client_key,
+    ].concat();
+    let client_id = reqwest::Identity::from_pem(client_certs.as_bytes()).unwrap();
+
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .identity(client_id)
+        .add_root_certificate(root_cert)
+        // .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
 
     // Prepare HTTP request headers
     let mut headers = HeaderMap::new();

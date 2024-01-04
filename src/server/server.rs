@@ -18,6 +18,7 @@ use tower_http::{
 };
 
 use super::{
+    certs::https::{create_server_certs, create_root_ca},
     crypto::aesgcm,
     db,
     listeners::listener::Listener,
@@ -32,7 +33,7 @@ use super::{
 use crate::{
     config::Config,
     server::db::DB_PATH,
-    utils::fs::{mkfile, exists},
+    utils::fs::{mkdir, mkfile, exists_file},
 };
 
 #[derive(Debug)]
@@ -60,13 +61,26 @@ impl Server {
     pub async fn add_listener(
         &mut self,
         name: String,
+        hostnames: Vec<String>,
         protocol: String,
         host: String,
         port: u16,
         init: bool,
     ) -> Result<(), Error> {
+        let _ = mkdir(format!("server/listeners/{}/certs", name.to_string()));
+
+        // If the protocol is `https`, create certificates
+        if protocol == "https" {
+            create_server_certs(
+                name.to_string(),
+                hostnames.to_owned(),
+                host.to_string()
+            );
+        }
+
         let listener = Listener::new(
             name.to_string(),
+            hostnames,
             protocol.to_string(),
             host.to_string(),
             port.to_owned(),
@@ -95,10 +109,7 @@ impl Server {
 
         let new_job = Job::new(
             (jobs_lock.len() + 1) as u32,
-            name.to_owned(),
-            protocol.to_owned(),
-            host.to_owned(),
-            port.to_owned(),
+            listener.clone(),
             Arc::new(Mutex::new(rx_job_lock.subscribe())),
             self.db.path.to_string(),
         );
@@ -136,7 +147,7 @@ impl Server {
         // Remove listener from database
         db::delete_listener(
             self.db.path.to_string(),
-            job.name.to_string()).unwrap();
+            job.listener.name.to_string()).unwrap();
 
         Ok(())
     }
@@ -151,7 +162,7 @@ pub async fn run(config: Config) {
     let server = Arc::new(Mutex::new(Server::new(config, db, tx_job)));
 
     // Load data from database or initialize
-    if exists(db_path.to_string()) {
+    if exists_file("server/hermit.db".to_string()) {
         // Load all listeners
         let all_listeners = db::get_all_listeners(db_path.to_string()).unwrap();
         if all_listeners.len() > 0 {
@@ -159,6 +170,7 @@ pub async fn run(config: Config) {
             for listener in all_listeners {
                 let _ = server_lock.add_listener(
                     listener.name,
+                    listener.hostnames,
                     listener.protocol,
                     listener.host,
                     listener.port,
@@ -171,7 +183,14 @@ pub async fn run(config: Config) {
         db::init_db(db_path.to_string()).unwrap();
     }
 
-    // Generate kaypair if they don't exist yet in database
+    // Generate the root certificates if they don't exist yet.
+    if  !exists_file("server/root_cert.pem".to_string()) ||
+        !exists_file("server/root_key.pem".to_string())
+    {
+        let _ = create_root_ca();
+    }
+
+    // Generate kaypair (for secure communication with agents) if it does not exist yet in database
     let keypair_exists = match db::exists_keypair(db_path.to_string()) {
         Ok(exists) => exists,
         Err(e) => {
@@ -184,9 +203,8 @@ pub async fn run(config: Config) {
         let encoded_secret = aesgcm::encode(secret.as_bytes());
         let encoded_public = aesgcm::encode(public.as_bytes());
 
-        db::add_keypair(db_path.to_string(), encoded_secret, encoded_public);
+        let _ = db::add_keypair(db_path.to_string(), encoded_secret, encoded_public);
     }
-
 
     let app = Router::new()
         .route("/hermit", get(ws_handler))

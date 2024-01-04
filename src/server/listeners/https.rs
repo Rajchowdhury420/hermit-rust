@@ -3,45 +3,80 @@ use axum::{
     http::StatusCode,
     Json,
     routing::{get, post},
-    Router,
+    Router
 };
+use futures_util::pin_mut;
 use hyper::body::Incoming;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::{error, info};
+use pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+use rustls_pemfile::{certs, rsa_private_keys, pkcs8_private_keys, private_key};
 use std::{
-    io::{Error, ErrorKind},
-    time::Duration,
+    fs::File,
+    io::{BufReader, Error, ErrorKind},
+    path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 use tokio::{
     net::TcpListener,
     sync::{broadcast, Mutex, watch},
 };
-use tower::Service;
+use tokio_rustls::{
+    rustls::ServerConfig,
+    TlsAcceptor,
+};
 use tower_http::{
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
+use tower_service::Service;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{
     server::{
         agents::Agent,
-        crypto::aesgcm::{cipher, decipher, decode, EncMessage, string_to_u8_32, vec_u8_to_u8_32},
+        crypto::aesgcm::{encode, decipher, decode, EncMessage, vec_u8_to_u8_32},
         db,
-        jobs::JobMessage, 
+        jobs::JobMessage,
         postdata::{CipherData, PlainData, RegisterAgentData},
     },
-    utils::fs::{empty_file, mkdir, mkfile, read_file, write_file},
+    utils::fs::{empty_file, get_app_dir, mkdir, mkfile, read_file, write_file},
 };
 
-pub async fn start_http_listener(
+pub async fn start_https_listener(
     job_id: u32,
+    name: String,
     host: String,
     port: u16,
     receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>,
     db_path: String,
 ) {
+
+    let cert_path_abs = format!("{}/server/listeners/{}/certs/cert.pem", get_app_dir(), name.to_string());
+    let key_path_abs = format!("{}/server/listeners/{}/certs/key.pem", get_app_dir(), name.to_string());
+
+    let certs = certs(
+        &mut BufReader::new(
+            &mut File::open(cert_path_abs).unwrap()
+        )).collect::<Result<Vec<_>, _>>().unwrap();
+
+    let private_key = private_key(
+        &mut BufReader::new(
+            &mut BufReader::new(
+                File::open(key_path_abs).unwrap()
+            ))).unwrap().unwrap();
+
+    let server_config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, private_key)
+        .map_err(|err| {
+            error!("{}", err);
+            return;
+        }).unwrap();
+
+    let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
+
     let app = Router::new()
         .route("/", get(hello))
         .route("/r", post(register))
@@ -59,13 +94,16 @@ pub async fn start_http_listener(
         .await
         .unwrap();
 
-    info!("Start HTTP listener on {}", listener.local_addr().unwrap());
+    info!("Start HTTPS listener on {}", listener.local_addr().unwrap());
 
     let (close_tx, close_rx) = watch::channel(());
 
+    pin_mut!(listener);
     loop {
         let receiver_clone_1 = Arc::clone(&receiver);
         let receiver_clone_2 = Arc::clone(&receiver);
+
+        let tls_acceptor = tls_acceptor.clone();
 
         let (socket, remote_addr) = tokio::select! {
             result = listener.accept() => {
@@ -75,7 +113,7 @@ pub async fn start_http_listener(
                 info!("Signal received, not accepting new connections.");
                 break;
             }
-        };
+        };        
 
         info!("Connection {remote_addr} accepted.");
 
@@ -85,6 +123,13 @@ pub async fn start_http_listener(
 
         tokio::spawn(async move {
             let receiver_clone_3 = Arc::clone(&receiver_clone_2);
+
+            // TLS
+            let Ok(socket) = tls_acceptor.accept(socket).await else {
+                error!("error during tls handshake connection from {}", remote_addr);
+                return;
+            };
+
             let socket = TokioIo::new(socket);
 
             let hyper_service = hyper::service::service_fn(move |request: Request<Incoming>| {
