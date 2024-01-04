@@ -7,7 +7,6 @@ use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
 
 use super::listeners::{
-    http::start_http_listener,
     https::start_https_listener,
     listener::Listener,
 };
@@ -64,13 +63,6 @@ impl Job {
                                 if !running {
                                     running = true;
                                     tokio::spawn(async move {
-                                        // start_http_listener(
-                                        //     job_id,
-                                        //     host_clone.to_string(),
-                                        //     port_clone,
-                                        //     rx_listener_clone,
-                                        //     db_path_clone,
-                                        // ).await;
                                         start_https_listener(
                                             job_id,
                                             name_clone.to_string(),

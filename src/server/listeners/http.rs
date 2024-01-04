@@ -27,7 +27,7 @@ use x25519_dalek::{PublicKey, StaticSecret};
 use crate::{
     server::{
         agents::Agent,
-        crypto::aesgcm::{cipher, decipher, decode, EncMessage, string_to_u8_32, vec_u8_to_u8_32},
+        crypto::aesgcm::{decipher, decode, EncMessage, vec_u8_to_u8_32},
         db,
         jobs::JobMessage, 
         postdata::{CipherData, PlainData, RegisterAgentData},
@@ -35,6 +35,7 @@ use crate::{
     utils::fs::{empty_file, mkdir, mkfile, read_file, write_file},
 };
 
+#[allow(dead_code)]
 pub async fn start_http_listener(
     job_id: u32,
     host: String,
@@ -126,11 +127,13 @@ pub async fn start_http_listener(
     close_tx.closed().await;
 }
 
+#[allow(dead_code)]
 async fn hello() -> &'static str {
     info!("Agent requested `/`");
     "Hello world!"
 }
 
+#[allow(dead_code)]
 async fn register(
     State(db_path): State<String>,
     Json(payload): Json<RegisterAgentData>,
@@ -170,6 +173,7 @@ async fn register(
     }
 }
 
+#[allow(dead_code)]
 async fn task_ask(
     State(db_path): State<String>,
     Json(payload): Json<PlainData>,
@@ -209,6 +213,7 @@ async fn task_ask(
     }
 }
 
+#[allow(dead_code)]
 async fn task_result(
     State(db_path): State<String>,
     Json(payload): Json<CipherData>,
@@ -264,6 +269,7 @@ async fn task_result(
     }
 }
 
+#[allow(dead_code)]
 async fn shutdown_signal(receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) {
     // let ctrl_c = async {
     //     tokio::signal::ctrl_c()
@@ -293,6 +299,7 @@ async fn shutdown_signal(receiver: Arc<Mutex<broadcast::Receiver<JobMessage>>>) 
     }
 }
 
+#[allow(dead_code)]
 fn get_server_keypair(db_path: String) -> Result<(StaticSecret, PublicKey), Error> {
     let (encoded_my_secret, encoded_my_public) = match db::get_keypair(db_path.to_string()) {
         Ok((s, p)) => (s, p),
@@ -310,6 +317,7 @@ fn get_server_keypair(db_path: String) -> Result<(StaticSecret, PublicKey), Erro
     Ok((my_secret, my_public))
 }
 
+#[allow(dead_code)]
 fn decipher_agent_name(ciphertext: String, nonce: String, my_secret: StaticSecret, opp_public: PublicKey) -> Result<String, Error> {
     match decipher(
         EncMessage { ciphertext, nonce },
@@ -325,6 +333,7 @@ fn decipher_agent_name(ciphertext: String, nonce: String, my_secret: StaticSecre
     };
 }
 
+#[allow(dead_code)]
 fn create_cipher_message(message: String, my_secret: StaticSecret, opp_public: PublicKey) -> String {
    let cipherdata = CipherData::new(
         "".to_string(),

@@ -1,7 +1,15 @@
 use std::ffi::c_void;
 use windows::{
     core::{Error, HRESULT, HSTRING, PCWSTR},
-    Win32::Networking::WinHttp::*
+    Win32::{
+        Networking::WinHttp::*,
+        Security::Cryptography::{
+            CertOpenStore,
+            CERT_STORE_OPEN_EXISTING_FLAG,
+            CERT_STORE_PROV_SYSTEM,
+            CERT_SYSTEM_STORE_LOCAL_MACHIN,
+        },
+    }
 };
 
 pub struct HInternet {
@@ -259,7 +267,7 @@ fn open_request(
         temp_ptr = at.as_mut_ptr();
     }
     
-    let handle: *mut c_void = unsafe {
+    let mut handle: *mut c_void = unsafe {
         WinHttpOpenRequest(
             h.handle,
             &method,
@@ -267,7 +275,8 @@ fn open_request(
             PCWSTR::null(),
             PCWSTR::null(),
             temp_ptr,
-            WINHTTP_OPEN_REQUEST_FLAGS(0),
+            // WINHTTP_OPEN_REQUEST_FLAGS(0), // for HTTP
+            WINHTTP_FLAG_SECURE, // for HTTPS
         )
     };
 
@@ -275,5 +284,95 @@ fn open_request(
         return Err(Error::from_win32());
     }
 
+    // for HTTPS
+    // Reference: https://gist.github.com/henkman/2e7a4dcf4822bc0029d7d2af731da5c5
+    // let dwflags: u32 =
+    //     SECURITY_FLAG_IGNORE_UNKNOWN_CA |
+    //     SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
+    //     SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
+    //     SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
+
+    // unsafe { WinHttpSetOption(
+    //         Some(handle),
+    //         WINHTTP_OPTION_SECURITY_FLAGS,
+    //         None,
+    //     );
+    // }
+
+
+
     Ok(HInternet { handle })
+}
+
+// HTTPS certificates
+// Reference: https://www.codeproject.com/Articles/24003/One-Click-SSL-Certificate-Registration-using-WinHT
+fn cert() {
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Networking/WinHttp/fn.WinHttpQueryOption.html
+    bret = unsafe {
+        WinHttpQueryOption(
+            hrequest,
+            WINHTTP_OPTION_SERVER_CERT_CONTEXT,
+            &pcert,
+            &dwlen,
+        );
+    };
+
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertOpenStore.html
+    hcertstore = unsafe {
+        CertOpenStore(
+            HSTRING::from("Root CA ECC"),
+            CERT_STORE_PROV_SYSTEM,
+            0,
+            CERT_STORE_OPEN_EXISTING_FLAG | CERT_SYSTEM_STORE_LOCAL_MACHIN,
+        )
+    };
+
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertAddCertificateContextToStore.html
+    bret = CertAddCertificateContextToStore(
+        hcertstore,
+        pcert,
+        CERT_STORE_ADD_REPLACE_EXISTING,
+        NULL
+    );
+
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertFreeCertificateContext.html
+    CertFreeCertificateContext(pcert);
+
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertCloseStore.html
+    let bret = CertCloseStore(hcertstore, 0);
+
+
+    // -----------------------------------------------------------------------------
+    // Reference:
+    // Reference: https://www.codeproject.com/Articles/24003/One-Click-SSL-Certificate-Registration-using-WinHT
+
+    // get a handle on the certificate
+    // bRet = WinHttpQueryOption(
+    //     hRequest,
+    //     WINHTTP_OPTION_SERVER_CERT_CONTEXT,
+    //     &pCert,
+    //     &dwLen
+    // );
+
+    // open a certificate store
+    // hCertStore = CertOpenStore(
+    //    CERT_STORE_PROV_SYSTEM,
+    //     0,
+    //     0,
+    //     CERT_STORE_OPEN_EXISTING_FLAG | CERT_SYSTEM_STORE_LOCAL_MACHINE,
+    //     L"Root");
+
+    // // add the certificate
+    // bRet =  CertAddCertificateContextToStore(
+    //     hCertStore,
+    //     pCert,
+    //     CERT_STORE_ADD_REPLACE_EXISTING,
+    //     NULL
+    // );
+
+    // // release the certificate
+    // CertFreeCertificateContext(pCert);
+
+    // // close the store
+    // bRet = CertCloseStore( hCertStore, 0 );
 }

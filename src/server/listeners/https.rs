@@ -7,14 +7,12 @@ use axum::{
 };
 use futures_util::pin_mut;
 use hyper::body::Incoming;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::TokioIo;
 use log::{error, info};
-use pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
-use rustls_pemfile::{certs, rsa_private_keys, pkcs8_private_keys, private_key};
+use rustls_pemfile::{certs, private_key};
 use std::{
     fs::File,
     io::{BufReader, Error, ErrorKind},
-    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -36,7 +34,7 @@ use x25519_dalek::{PublicKey, StaticSecret};
 use crate::{
     server::{
         agents::Agent,
-        crypto::aesgcm::{encode, decipher, decode, EncMessage, vec_u8_to_u8_32},
+        crypto::aesgcm::{decipher, decode, EncMessage, vec_u8_to_u8_32},
         db,
         jobs::JobMessage,
         postdata::{CipherData, PlainData, RegisterAgentData},
@@ -113,7 +111,7 @@ pub async fn start_https_listener(
                 info!("Signal received, not accepting new connections.");
                 break;
             }
-        };        
+        };
 
         info!("Connection {remote_addr} accepted.");
 
@@ -124,13 +122,13 @@ pub async fn start_https_listener(
         tokio::spawn(async move {
             let receiver_clone_3 = Arc::clone(&receiver_clone_2);
 
-            // TLS
-            let Ok(socket) = tls_acceptor.accept(socket).await else {
-                error!("error during tls handshake connection from {}", remote_addr);
+            // TLS handshake
+            let Ok(tls_socket) = tls_acceptor.accept(socket).await else {
+                error!("error during tls handshake connection from {}. Use HTTP instead of HTTPS.", remote_addr);
                 return;
             };
 
-            let socket = TokioIo::new(socket);
+            let socket = TokioIo::new(tls_socket);
 
             let hyper_service = hyper::service::service_fn(move |request: Request<Incoming>| {
                 tower_service.clone().call(request)

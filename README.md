@@ -11,9 +11,9 @@ I'm developing it to learn how C2 framework works and learn Rust programming lan
 
 - C2 server
 - C2 client (CLI)
-- HTTP listener
+- HTTP(S) listener
 - Implant generation
-- AES encryption for communication
+- AES encryption for each message
 - Multi listeners, agents, operators
 
 <br />
