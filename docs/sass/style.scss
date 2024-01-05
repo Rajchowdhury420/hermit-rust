@@ -21,8 +21,8 @@ $mq-breakpoints: (
 
 :root {
     // Colors
-    --color-dark: #2b2b29;
-    --color-light: #b5b6bd;
+    --color-dark: #303032;
+    --color-light: #e9eaed;
     --color-red: #ea4080;
     --color-black: #020200;
 
@@ -106,39 +106,118 @@ header {
     z-index: 50;
     width: 100vw;
     background-color: var(--color-light);
-    padding: 20px 0;
+    padding: 12px 0;
     display: flex;
     align-items: baseline;
     justify-content: space-around;
+
+    @include mq(sm) {
+        padding: 16px 0;
+    }
 
     #title {
         display: flex;
         align-items: baseline;
         text-decoration: none;
-        font-size: 1.4em;
+        font-size: 1.2em;
         font-weight: bold;
         color: var(--color-dark);
 
+        @include mq(sm) {
+            font-size: 1.4em;
+        }
+
         .icon {
-            width: 32px;
+            width: 24px;
+
+            @include mq(sm) {
+                width: 32px;
+            }
         }
     }
 
     nav {
+        position: fixed;
+        top: 44px;
+        right: 20px;
+        padding: 12px;
+        background-color: var(--color-black);
+
         display: none;
+        flex-direction: column;
+        align-items: flex-start;
     
         @include mq(sm) {
+            position: initial;
             display: flex;
+            flex-direction: row;
             align-items: center;
+            background-color: transparent;
+            color: var(--color-dark);
         }
         
         a {
-            margin: 0 8px;
+            margin: 8px 0;
             font-size: 1em;
-            color: var(--color-dark);
+            color: var(--color-light);
             text-decoration: none;
             font-weight: bold;
+
+            @include mq(sm) {
+                margin: 0 8px;
+                color: var(--color-dark);
+            }
         }
+    }
+
+    .hamburger {
+        position: fixed;
+        top: 18px;
+        right: 24px;
+        display: block;
+        width: 24px;
+        height: 20px;
+        outline: none;
+        border: none;
+
+        @include mq(sm) {
+            display: none;
+        }
+
+        .bar {
+            position: absolute;
+            left: 0;
+            display: block;
+            width: 100%;
+            height: 4px;
+            background-color: var(--color-dark);
+
+            &:nth-child(1) {
+                top: 0;
+            }
+
+            &:nth-child(2) {
+                top: 50%;
+                transform: translateY(-50%);
+            }
+
+            &:nth-child(3) {
+                top: 100%;
+                transform: translateY(-100%);
+            }
+        }
+    }
+
+    .hamburger_bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 10;
+        display: none;
+        width: 100vw;
+        height: 100vh;
+        background-color: black;
+        opacity: 0.5;
     }
 }
 
@@ -218,7 +297,7 @@ header {
             text-decoration: none;
 
             &:hover {
-                background-color: var(--color-red);
+                filter: brightness(1.1);
             }
 
             @include mq(sm) {
@@ -363,6 +442,29 @@ header {
                 }
             }
         }
+    }
 
+    .pages_for_hamburger {
+        position: fixed;
+        top: 44px;
+        right: 20px;
+        z-index: 50;
+        padding: 12px;
+        background-color: var(--color-black);
+
+        display: none;
+        flex-direction: column;
+        align-items: flex-start;
+
+        @include mq(sm) {
+            display: none!important;
+        }
+
+        a {
+            margin: 8px 0;
+            font-size: 0.95em;
+            font-weight: bold;
+            text-decoration: none;
+        }
     }
 }

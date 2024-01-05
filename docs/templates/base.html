@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>Hermit C2</title>
-        <link rel="icon" href="/favicon.ico">
+        <link rel="icon" href="/icon.png">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
@@ -28,11 +28,20 @@
                     GitHub
                 </a>
             </nav>
+
+            <!-- Hamburger -->
+            <button class="hamburger">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </button>
+            <div class="hamburger_bg"></div>
         </header>
         <section class="section">
             <div class="container">
                 {% block content %} {% endblock %}
             </div>
         </section>
+        <script src="/hamburger.js"></script>
     </body>
 </html>

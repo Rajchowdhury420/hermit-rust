@@ -232,7 +232,6 @@ async fn post(
     url_path: String,
     data: String
 ) -> Result<String, Error> {
-    // TODO: Encrypt and encode the post data
 
     let hrequest = HRequest::new(
         hconnect,

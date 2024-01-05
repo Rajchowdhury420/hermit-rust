@@ -47,7 +47,7 @@ It's prohibited to use on systems not under your control.
 ## USAGE
 
 <!-- Plese refer to [https://hermit.hdks.org/](the docs) for more details. -->
-Plese refer to [docs](the docs) for more details.
+Plese refer to [the documentation](/docs) for more details.
 
 ### C2 Server
 
