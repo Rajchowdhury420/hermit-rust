@@ -8,7 +8,6 @@ use url::Url;
 use crate::{
     server::{
         certs::https::create_client_certs,
-        crypto::aesgcm::{encode, generate_keypair},
         db,
     },
     utils::fs::{get_app_dir, read_file},

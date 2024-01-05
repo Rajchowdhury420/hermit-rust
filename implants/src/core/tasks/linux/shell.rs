@@ -27,6 +27,9 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
         };
     }
 
+    if result.len() == 0 {
+        result = "Success.".as_bytes().to_vec();
+    }
 
     Ok(result)
 }

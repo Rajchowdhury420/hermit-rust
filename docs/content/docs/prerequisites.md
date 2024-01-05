@@ -56,4 +56,4 @@ rustup target add i686-pc-windows-gnu
 
 Similar to the C2 server, the C2 client also works on **Linux** and **Windows** but recommended to use it on **Linux** for stable operations.  
 
-Fortunately, thera are no prerequisites for running the C2 client except **Rust**.
+Fortunately, thera are no prerequisites for running the C2 client except **Rust** as far as I know.

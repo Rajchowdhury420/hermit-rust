@@ -27,7 +27,8 @@ pub fn create_cmd(client: &Client) -> Command {
                             Arg::new("host")
                                 .short('H')
                                 .long("host")
-                                .help(format!("Host [default: {}]", client.server_host.to_string()))
+                                // .help(format!("Host [default: {}]", client.server_host.to_string()))
+                                .default_value("0.0.0.0")
                                 .value_parser(value_parser!(String)),
                             Arg::new("port")
                                 .short('P')
@@ -40,9 +41,10 @@ pub fn create_cmd(client: &Client) -> Command {
                                 .long("name")
                                 .help("Specify the name of a listener")
                                 .value_parser(value_parser!(String)),
-                            Arg::new("hostnames")
-                                .long("hostnames")
-                                .help("Specify the hostnames for the HTTPS certificates")
+                            Arg::new("domains")
+                                .short('d')
+                                .long("domains")
+                                .help("Specify the domains for the HTTPS certificates")
                                 .default_value("localhost")
                                 .value_parser(value_parser!(String)),
                         ])

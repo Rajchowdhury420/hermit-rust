@@ -82,6 +82,17 @@ pre {
     }
 }
 
+// Scrollbar
+pre::-webkit-scrollbar {
+    height: 6px;
+}
+pre::-webkit-scrollbar-track {
+    background-color: var(--color-black);
+}
+pre::-webkit-scrollbar-thumb {
+    background-color: var(--color-light);
+}
+
 ul li code, p code {
     padding: 2px 4px;
     background-color: var(--color-black);
@@ -97,14 +108,20 @@ header {
     background-color: var(--color-light);
     padding: 20px 0;
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-around;
 
     #title {
+        display: flex;
+        align-items: baseline;
         text-decoration: none;
-        font-size: 1.2em;
+        font-size: 1.4em;
         font-weight: bold;
         color: var(--color-dark);
+
+        .icon {
+            width: 32px;
+        }
     }
 
     nav {
@@ -199,6 +216,10 @@ header {
             font-weight: bold;
             font-size: 1.2em;
             text-decoration: none;
+
+            &:hover {
+                background-color: var(--color-red);
+            }
 
             @include mq(sm) {
                 margin: 0 6px;

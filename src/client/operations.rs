@@ -60,21 +60,21 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 Some(n) => Some(n.to_owned()),
                                 None => Some(random_name("listener".to_owned())),
                             };
-                            let hostnames: Option<Vec<String>> = match subm2.get_one::<String>("hostnames") {
+                            let domains: Option<Vec<String>> = match subm2.get_one::<String>("domains") {
                                 Some(n) => {
                                     Some(n.split(",").map(|s| s.to_string()).collect())
                                 }
                                 None => Some(Vec::new()),
                             };
-                            let host = match subm2.get_one::<String>("host") {
-                                Some(h) => Some(h.to_string()),
-                                None => Some(client.server_host.to_string())
-                            };
+                            // let host = match subm2.get_one::<String>("host") {
+                            //     Some(h) => Some(h.to_string()),
+                            //     None => Some(client.server_host.to_string())
+                            // };
                             let listener_option = ListenerOption {
                                 name,
-                                hostnames,
+                                domains,
                                 proto: subm2.get_one::<String>("protocol").cloned(),
-                                host,
+                                host: subm2.get_one::<String>("host").cloned(),
                                 port: subm2.get_one::<u16>("port").cloned(),
                             };
                             options.listener_opt = Some(listener_option);
@@ -88,7 +88,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
         
                             options.listener_opt = Some(ListenerOption {
                                 name: target,
-                                hostnames: None,
+                                domains: None,
                                 proto: None,
                                 host: None,
                                 port: None,
@@ -103,7 +103,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
         
                             options.listener_opt = Some(ListenerOption {
                                 name: target,
-                                hostnames: None,
+                                domains: None,
                                 proto: None,
                                 host: None,
                                 port: None,
@@ -118,7 +118,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
         
                             options.listener_opt = Some(ListenerOption {
                                 name: target,
-                                hostnames: None,
+                                domains: None,
                                 proto: None,
                                 host: None,
                                 port: None,

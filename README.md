@@ -1,20 +1,31 @@
 # Hermit C2
 
 A post-exploitation, command and control framework written in Rust.  
-I'm developing it to learn how C2 framework works and learn Rust programming language.
+I'm developing it to learn how the C2 framework works and learn Rust programming language.
+
+![diagram](assets/diagram.png)
 
 <br />
 
 ## FEATURES
 
-![diagram](assets/diagram.png)
+This is still in the early stages of development and still has minimal basic functionality.
 
 - C2 server
 - C2 client (CLI)
-- HTTP(S) listener
+- HTTPS listener
 - Implant generation
 - AES encryption for each message
 - Multi listeners, agents, operators
+- Database (SQLite) for the settings persistence
+
+<br />
+
+## UNSUPPORTED FEATURES (YET)
+
+- AV/EDR evasion
+- Implant obfuscation
+- And other techniques.
 
 <br />
 
@@ -22,7 +33,7 @@ I'm developing it to learn how C2 framework works and learn Rust programming lan
 
 This project is currently under development.  
 It does not have features enough for attack simulations yet, and only the basic feature to communicate with target computer.  
-However, I'm working to add those (or new) features.
+However, I'm working to implement those (or new) features.
 
 <br />
 
@@ -34,6 +45,9 @@ It's prohibited to use on systems not under your control.
 <br />
 
 ## USAGE
+
+<!-- Plese refer to [https://hermit.hdks.org/](the docs) for more details. -->
+Plese refer to [docs](the docs) for more details.
 
 ### C2 Server
 

@@ -1,12 +1,13 @@
-use clap::{Arg, ArgMatches, value_parser, Command};
+use clap::{ArgMatches, Command};
 use colored::Colorize;
 use futures_util::{SinkExt, StreamExt};
 use rustyline::{DefaultEditor, Result};
 use rustyline::error::ReadlineError;
 use spinners::{Spinner, Spinners};
-use std::fs;
-use std::process;
-use std::sync::{Arc, Mutex};
+use std::{
+    process,
+    sync::{Arc, Mutex},
+};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::protocol::Message,
@@ -19,7 +20,7 @@ use super::prompt::set_prompt;
 use crate::utils::fs::{write_file, get_app_dir};
 
 const EXIT_SUCCESS: i32 = 0;
-const EXIT_FAILURE: i32 = 0;
+// const EXIT_FAILURE: i32 = 0;
 
 #[derive(Debug)]
 struct Commands {
@@ -142,7 +143,7 @@ impl Client {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     message = Message::Text(format!("listener add {} {} {}://{}:{}/",
                                         listener_opt.name.unwrap(),
-                                        listener_opt.hostnames.unwrap().join(","),
+                                        listener_opt.domains.unwrap().join(","),
                                         listener_opt.proto.unwrap(),
                                         listener_opt.host.unwrap(),
                                         listener_opt.port.unwrap()));

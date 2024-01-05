@@ -6,7 +6,6 @@ use rcgen::{
     DistinguishedName,
     DnType,
     DnValue,
-    generate_simple_self_signed,
     IsCa,
     KeyIdMethod,
     KeyPair,
@@ -15,12 +14,12 @@ use rcgen::{
     SanType,
 };
 use std::{
-    io::{Error, ErrorKind},
+    io::Error,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
 use time::{Duration, OffsetDateTime};
 
-use crate::utils::fs::{exists_file, get_app_dir, read_file, write_file};
+use crate::utils::fs::{get_app_dir, read_file, write_file};
 
 // Reference: https://github.com/rustls/rcgen/issues/111
 pub fn create_root_ca() {
@@ -166,7 +165,7 @@ pub fn create_client_certs() -> (String, String) {
     params.key_pair = Some(KeyPair::generate(&PKCS_ECDSA_P384_SHA384).unwrap());
     params.key_identifier_method = KeyIdMethod::Sha384;
 
-    let mut dn = DistinguishedName::new();
+    let dn = DistinguishedName::new();
     params.distinguished_name = dn;
 
     params.not_before = OffsetDateTime::now_utc();
@@ -177,73 +176,29 @@ pub fn create_client_certs() -> (String, String) {
     let root_ca = read_root_ca().unwrap();
     let cert_signed_pem = cert.serialize_pem_with_signer(&root_ca).unwrap();
 
-    let cert_pem = cert.serialize_pem().unwrap();
+    let _cert_pem = cert.serialize_pem().unwrap();
     let key_pem = cert.serialize_private_key_pem();
 
     (cert_signed_pem, key_pem)
 }
 
-// This is the same purpose as the `create_server_certs` function.
-pub fn create_certs(name: String, hosts: Vec<String>) {
-    info!("Creating certificates for HTTPS...");
+// pub fn read_server_certs(name: String) -> Result<(String, String), Error> {
+//     let cert_path = format!("server/listeners/{}/certs/cert.pem", name.to_string());
+//     let key_path = format!("server/listeners/{}/certs/key.pem", name.to_string());
 
-    let cert_path = format!("server/listeners/{}/certs/cert.pem", name.to_string());
-    let cert_path_abs = format!("{}/{}", get_app_dir(), cert_path.to_string());
-    let key_path = format!("server/listeners/{}/certs/key.pem", name.to_string());
-    let key_path_abs = format!("{}/{}", get_app_dir(), key_path.to_string());
+//     let cert = match read_file(cert_path) {
+//         Ok(b) => String::from_utf8(b).unwrap(),
+//         Err(e) => {
+//             return Err(Error::new(ErrorKind::Other, format!("{}", e)));
+//         }
+//     };
 
-    // Check if the certificates already exist
-    if exists_file(cert_path.to_string()) && exists_file(key_path.to_string()) {
-        info!("The certificates already exist.");
-        return;
-    }
+//     let key = match read_file(key_path) {
+//         Ok(b) => String::from_utf8(b).unwrap(),
+//         Err(e) => {
+//             return Err(Error::new(ErrorKind::Other, format!("{}", e)));
+//         }
+//     };
 
-    let subject_alt_names = hosts;
-
-    let cert = generate_simple_self_signed(subject_alt_names).unwrap();
-
-    match write_file(
-        cert_path.to_string(),
-        cert.serialize_pem().unwrap().as_bytes()
-    ) {
-        Ok(_) => {
-            info!("{} created successfully.", cert_path_abs.to_string());
-        },
-        Err(e) => {
-            error!("Could not create cert.pem: {}", e);
-        },
-    }
-
-    match write_file(
-        key_path.to_string(),
-        cert.serialize_private_key_pem().as_bytes()
-    ) {
-        Ok(_) => {
-            info!("{} created successfully.", key_path_abs.to_string());
-        },
-        Err(e) => {
-            error!("Could not create key.pem: {}", e);
-        }
-    }
-}
-
-pub fn read_server_certs(name: String) -> Result<(String, String), Error> {
-    let cert_path = format!("server/listeners/{}/certs/cert.pem", name.to_string());
-    let key_path = format!("server/listeners/{}/certs/key.pem", name.to_string());
-
-    let cert = match read_file(cert_path) {
-        Ok(b) => String::from_utf8(b).unwrap(),
-        Err(e) => {
-            return Err(Error::new(ErrorKind::Other, format!("{}", e)));
-        }
-    };
-
-    let key = match read_file(key_path) {
-        Ok(b) => String::from_utf8(b).unwrap(),
-        Err(e) => {
-            return Err(Error::new(ErrorKind::Other, format!("{}", e)));
-        }
-    };
-
-    Ok((cert, key))
-}
+//     Ok((cert, key))
+// }

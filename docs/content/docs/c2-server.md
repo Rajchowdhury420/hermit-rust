@@ -10,3 +10,5 @@ toc=true
 ```sh
 hermit server
 ```
+
+The C2 server start on `0.0.0.0:9999` by default.

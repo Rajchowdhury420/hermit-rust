@@ -5,9 +5,10 @@ use windows::{
         Networking::WinHttp::*,
         Security::Cryptography::{
             CertOpenStore,
+            CertOpenSystemStoreA,
             CERT_STORE_OPEN_EXISTING_FLAG,
             CERT_STORE_PROV_SYSTEM,
-            CERT_SYSTEM_STORE_LOCAL_MACHIN,
+            CERT_SYSTEM_STORE_LOCAL_MACHINE_ID,
         },
     }
 };
@@ -72,6 +73,16 @@ impl HRequest {
         accept_types: Option<Vec<HSTRING>>
     ) -> Result<HRequest, Error> {
         let hi = open_request(&hconnect.h, method, url_path, accept_types)?;
+
+        // Set option to ignore invalid certificates for HTTPS
+        match set_option_ignore_cert_invalid(&hi) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Error occured when setting the WinHttpSetOption.");
+                return Err(Error::from_win32());
+            }
+        }
+
         Ok(HRequest { h: hi })
     }
 
@@ -284,62 +295,105 @@ fn open_request(
         return Err(Error::from_win32());
     }
 
-    // for HTTPS
-    // Reference: https://gist.github.com/henkman/2e7a4dcf4822bc0029d7d2af731da5c5
-    // let dwflags: u32 =
-    //     SECURITY_FLAG_IGNORE_UNKNOWN_CA |
-    //     SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
-    //     SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
-    //     SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
-
-    // unsafe { WinHttpSetOption(
-    //         Some(handle),
-    //         WINHTTP_OPTION_SECURITY_FLAGS,
-    //         None,
-    //     );
-    // }
-
-
-
     Ok(HInternet { handle })
 }
 
-// HTTPS certificates
-// Reference: https://www.codeproject.com/Articles/24003/One-Click-SSL-Certificate-Registration-using-WinHT
-fn cert() {
-    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Networking/WinHttp/fn.WinHttpQueryOption.html
-    bret = unsafe {
-        WinHttpQueryOption(
-            hrequest,
-            WINHTTP_OPTION_SERVER_CERT_CONTEXT,
-            &pcert,
-            &dwlen,
-        );
-    };
+fn set_option_ignore_cert_invalid(h: &HInternet) -> Result<(), Error> {
+    let dwflags: u32 =
+        SECURITY_FLAG_IGNORE_UNKNOWN_CA |
+        SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
+        SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
+        SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
 
-    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertOpenStore.html
-    hcertstore = unsafe {
-        CertOpenStore(
-            HSTRING::from("Root CA ECC"),
-            CERT_STORE_PROV_SYSTEM,
-            0,
-            CERT_STORE_OPEN_EXISTING_FLAG | CERT_SYSTEM_STORE_LOCAL_MACHIN,
+    //     let dwflags: u32 =
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_SSL3 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+
+    let success = unsafe {
+        // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Networking/WinHttp/fn.WinHttpSetOption.html
+        WinHttpSetOption(
+            Some(h.handle),
+            WINHTTP_OPTION_SECURITY_FLAGS,
+            Some(&dwflags.to_le_bytes()),
         )
     };
 
+    success
+}
+
+// HTTPS certificates
+// References:
+// - https://learn.microsoft.com/ja-jp/windows/win32/winhttp/ssl-in-winhttp
+// - https://www.codeproject.com/Articles/24003/One-Click-SSL-Certificate-Registration-using-WinHT
+fn set_certificates(h: &HInternet) {
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Networking/WinHttp/fn.WinHttpQueryOption.html
+    // bret = unsafe {
+    //     WinHttpQueryOption(
+    //         hrequest,
+    //         WINHTTP_OPTION_SERVER_CERT_CONTEXT,
+    //         &pcert,
+    //         &dwlen,
+    //     );
+    // };
+
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertOpenStore.html
+    // hcertstore = unsafe {
+    //     CertOpenStore(
+    //         HSTRING::from("Root CA ECC"),
+    //         CERT_STORE_PROV_SYSTEM,
+    //         0,
+    //         CERT_STORE_OPEN_EXISTING_FLAG | CERT_SYSTEM_STORE_LOCAL_MACHINE_ID,
+    //     )
+    // };
+
+    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertOpenSystemStoreA.html
+    // let hcertstore = unsafe {
+    //     CertOpenSystemStoreA(
+    //         0,
+    //         HSTRING::from("Root CA ECC"),
+    //     )
+    // };
+
     // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertAddCertificateContextToStore.html
-    bret = CertAddCertificateContextToStore(
-        hcertstore,
-        pcert,
-        CERT_STORE_ADD_REPLACE_EXISTING,
-        NULL
-    );
+    // bret = CertAddCertificateContextToStore(
+    //     hcertstore,
+    //     pcert,
+    //     CERT_STORE_ADD_REPLACE_EXISTING,
+    //     NULL
+    // );
+
+    // - https://gist.github.com/henkman/2e7a4dcf4822bc0029d7d2af731da5c5
+    // - https://learn.microsoft.com/en-us/answers/questions/673794/tls-1-3-support-for-winhttp-in-windows11
+    //     let dwflags: u32 =
+    //         SECURITY_FLAG_IGNORE_UNKNOWN_CA |
+    //         SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
+    //         SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
+    //         SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
+
+    //     let dwflags: u32 =
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_SSL3 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 |
+    //         WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+
+    //     let success = unsafe {
+    //         // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Networking/WinHttp/fn.WinHttpSetOption.html
+    //         WinHttpSetOption(
+    //             Some(h.handle),
+    //             WINHTTP_OPTION_SECURE_PROTOCOLS,
+    //             Some(&mut dwflags.as_ptr()),
+    //         );
+    //     };
 
     // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertFreeCertificateContext.html
-    CertFreeCertificateContext(pcert);
+    // CertFreeCertificateContext(pcert);
 
     // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/fn.CertCloseStore.html
-    let bret = CertCloseStore(hcertstore, 0);
+    // let bret = CertCloseStore(hcertstore, 0);
 
 
     // -----------------------------------------------------------------------------

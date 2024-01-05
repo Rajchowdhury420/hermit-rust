@@ -71,6 +71,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 resp
             }
             Err(e) => {
+                println!("Error registration: {:?}", e);
                 continue;
             }
         };
