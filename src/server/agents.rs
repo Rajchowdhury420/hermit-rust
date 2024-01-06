@@ -110,31 +110,48 @@ impl Agent {
     }
 }
 
-pub fn format_agents(agents: &Vec<Agent>) -> String  {
-    info!("Getting agent status...");
+pub fn format_agent_details(agent: Agent) -> String {
+    info!("Getting the agent details...");
+
+    let mut output = String::new();
+    // output = output + "+" + "-".repeat(64).as_str() + "\n";
+    output = output + "\n";
+    output = output + format!("{:<15} : {:<20}\n", "ID", agent.id).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "NAME", agent.name).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "HOSTNAME", agent.hostname).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "OS", format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned())).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "LISTENER", agent.listener_url).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "PUBLIC KEY", agent.public_key).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "REGISTERED", agent.registered.to_string()).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "LAST COMMIT", agent.last_commit.to_string()).as_str();
+    output
+}
+
+pub fn format_all_agents(agents: &Vec<Agent>) -> String  {
+    info!("Getting agents status...");
     if agents.len() == 0 {
-        return String::from("No agents found.");
+        return String::new();
     }
 
-    let mut output = format!(
-        "{:>5} | {:<20} | {:<20} | {:<15} | {:<20} | {:<20} | {:<15} | {:<15}\n",
-        "ID", "NAME", "HOSTNAME", "OS", "LISTENER", "PUBLIC KEY", "REGISTERED", "LAST COMMIT"
-    );
-    output = output + "-".repeat(128).as_str() + "\n";
+    let mut output = String::new();
+    output = output + "\n";
+    output = output + format!(
+        "{:>3} | {:<18} | {:<15} | {:<15} | {:<25} | {:<15}\n",
+        "ID", "NAME", "HOSTNAME", "OS", "LISTENER", "LAST COMMIT"
+    ).as_str();
+    output = output + "-".repeat(106).as_str() + "\n";
 
     for agent in agents {
         output = output + format!(
-            "{:>5} | {:<20} | {:<20} | {:<15} | {:<20} | {:<20} | {:<15} | {:<15}\n",
+            "{:>3} | {:<18} | {:<15} | {:<15} | {:<25} | {:<15}\n",
             agent.id.to_owned(),
             agent.name.to_owned(),
             agent.hostname.to_owned(),
             format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned()),
             agent.listener_url.to_owned(),
-            agent.public_key.to_owned(),
-            agent.registered.to_string(),
             agent.last_commit.to_string(),
         ).as_str();
     }
 
-    return output;
+    output
 }

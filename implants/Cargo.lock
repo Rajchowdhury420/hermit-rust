@@ -724,6 +724,7 @@ dependencies = [
  "aes-gcm-siv",
  "data-encoding",
  "rand",
+ "regex",
  "reqwest",
  "screenshots",
  "serde",

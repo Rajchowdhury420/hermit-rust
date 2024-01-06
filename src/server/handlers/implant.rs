@@ -7,7 +7,7 @@ use crate::server::{
     db,
     implants::{
         generate::generate,
-        implant::{format_implants, Implant},
+        implant::{format_all_implants, format_implant_details, Implant},
     },
     server::Server
 };
@@ -24,24 +24,29 @@ pub async fn handle_implant(
     match args[1].as_str() {
         "gen" => {
             let i_name = args[2].to_owned();
-            let i_listener_url = args[3].to_owned();
+            let i_url = args[3].to_owned();
             let i_os = args[4].to_owned();
             let i_arch = args[5].to_owned();
             let i_format = args[6].to_owned();
-            let i_sleep: u16 = args[7].to_owned().parse().unwrap();
+            let i_sleep: u64 = args[7].to_owned().parse().unwrap();
+            let i_jitter: u64 = args[8].to_owned().parse().unwrap();
 
             let implant = Implant::new(
                 0, // Temporary ID
                 i_name.to_owned(),
-                i_listener_url.to_owned(),
+                i_url.to_owned(),
                 i_os.to_owned(),
                 i_arch.to_owned(),
                 i_format.to_owned(),
                 i_sleep.to_owned(),
+                i_jitter.to_owned(),
             );
 
             // Check duplicate
-            let exists = db::exists_implant(server_lock.db.path.to_string(), implant.clone()).unwrap();
+            let exists = db::exists_implant(
+                server_lock.db.path.to_string(),
+                implant.clone()
+            ).unwrap();
             if exists {
                 let _ = socket_lock.send(
                     Message::Text(
@@ -55,11 +60,12 @@ pub async fn handle_implant(
             match generate(
                 server_lock.db.path.to_string(),
                 i_name.to_owned(),
-                i_listener_url.to_owned(),
+                i_url.to_owned(),
                 i_os.to_owned(),
                 i_arch.to_owned(),
                 i_format.to_owned(),
                 i_sleep,
+                i_jitter,
             ) {
                 Ok((output, mut buffer)) => {
                     let _ = send_implant_binary(
@@ -115,11 +121,12 @@ pub async fn handle_implant(
                 match generate(
                     server_lock.db.path.to_string(),
                     imp.name,
-                    imp.listener_url,
+                    imp.url,
                     imp.os,
                     imp.arch,
                     imp.format,
                     imp.sleep,
+                    imp.jitter,
                 ) {
                     Ok((output, mut buffer)) => {
                         let _ = send_implant_binary(
@@ -147,26 +154,65 @@ pub async fn handle_implant(
             info!("Deleting the implant.");
             let i_name = args[2].to_owned();
 
-            // Remove the implant from the list
-            match db::delete_implant(server_lock.db.path.to_string(), i_name.to_string()) {
-                Ok(_) => {
-                    let _ = socket_lock.send(
-                        Message::Text(
-                            "[implant:delete:ok] Implant deleted successfully.".to_owned()
-                        )).await;
+            if i_name == "all" {
+                match db::delete_all_implants(server_lock.db.path.to_string()) {
+                    Ok(_) => {
+                        let _ = socket_lock.send(
+                            Message::Text(
+                                "[implant:delete:ok] All implants deleted successfully.".to_owned()
+                            )).await;
+                    }
+                    Err(_) => {
+                        let _ = socket_lock.send(
+                            Message::Text(
+                                "[implant:delete:error] All implants could not be deleted.".to_owned()
+                            )).await;
+                    }
                 }
-                Err(_) => {
-                    let _ = socket_lock.send(
-                        Message::Text(
-                            "[implant:delete:error] Implant could not be delete.".to_owned()
-                        )).await;
+            } else {
+                match db::delete_implant(server_lock.db.path.to_string(), i_name.to_string()) {
+                    Ok(_) => {
+                        let _ = socket_lock.send(
+                            Message::Text(
+                                "[implant:delete:ok] Implant deleted successfully.".to_owned()
+                            )).await;
+                    }
+                    Err(_) => {
+                        let _ = socket_lock.send(
+                            Message::Text(
+                                "[implant:delete:error] Implant could not be deleted.".to_owned()
+                            )).await;
+                    }
                 }
             }
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
         }
-        "list" => {
-            let output = format_implants(&mut implants);
+        "info" => {
+            let i_name = args[2].to_owned();
+            let implant = match db::get_implant(server_lock.db.path.to_string(), i_name.to_string()) {
+                Ok(imp) => imp,
+                Err(e) => {
+                    let _ = socket_lock.send(
+                        Message::Text(
+                            format!("[implant:info:error] {}", e.to_string()))).await;
+                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                    return;
+                }
+            };
+
+            let output = format_implant_details(implant);
             let _ = socket_lock.send(Message::Text(output)).await;
+            let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+        }
+        "list" => {
+            let output = format_all_implants(&mut implants);
+
+            if output == "" {
+                let _ = socket_lock.send(
+                    Message::Text("[implant:list:error] Implant not found.".to_owned())).await;
+            } else {
+                let _ = socket_lock.send(Message::Text(output)).await;
+            }
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
         }
         _ => {
@@ -181,27 +227,31 @@ async fn send_implant_binary(
     socket_lock: &mut MutexGuard<'_, WebSocket>,
     output: String,
 ) {
-    if buffer.len() > 10000000 {
-                                                    
-        // Split buffer
-        let buffer2 = buffer.split_off(10000000);
-        
-        let _ = socket_lock.send(
-            Message::Text("[implant:gen:ok:sending]".to_owned())).await;
-        let _ = socket_lock.send(Message::Binary(buffer.to_vec())).await;
+    let split_size: usize = 10000000;
 
-        let _ = socket_lock.send(
-            Message::Text(format!(
-                "[implant:gen:ok:complete] {}",
-                output,
-            ))).await;
-        let _ = socket_lock.send(Message::Binary(buffer2.to_vec())).await;
-    } else {
+    if buffer.len() < split_size {
         let _ = socket_lock.send(
             Message::Text(format!(
                 "[implant:gen:ok:complete] {}",
                 output,
             ))).await;
         let _ = socket_lock.send(Message::Binary(buffer.to_vec())).await;
+        return;
     }
+
+    // let mut buf_split: Vec<Vec<u8>> = Vec::new();
+
+    // Split buffer    
+    let mut buffer2 = buffer.split_off(split_size);
+    
+    let _ = socket_lock.send(
+        Message::Text("[implant:gen:ok:sending]".to_owned())).await;
+    let _ = socket_lock.send(Message::Binary(buffer.to_vec())).await;
+
+    let _ = socket_lock.send(
+        Message::Text(format!(
+            "[implant:gen:ok:complete] {}",
+            output,
+        ))).await;
+    let _ = socket_lock.send(Message::Binary(buffer2.to_vec())).await;
 }

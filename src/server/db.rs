@@ -6,6 +6,7 @@ pub use agents::{
     init_agents,
     add_agent,
     delete_agent,
+    delete_all_agents,
     exists_agent,
     get_agent,
     get_all_agents,
@@ -17,7 +18,9 @@ pub use implants::{
     init_implants,
     add_implant,
     delete_implant,
+    delete_all_implants,
     exists_implant,
+    get_implant,
     get_all_implants,
 };
 
@@ -36,6 +39,7 @@ pub use listeners::{
     init_listeners,
     add_listener,
     delete_listener,
+    delete_all_listeners,
     exists_listener,
     get_all_listeners
 };

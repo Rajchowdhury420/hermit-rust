@@ -101,6 +101,18 @@ pub fn delete_agent(db_path: String, agent_name: String) -> Result<()> {
     Ok(())
 }
 
+pub fn delete_all_agents(db_path: String) -> Result<()> {
+    let db = match Connection::open(db_path) {
+        Ok(d) => d,
+        Err(e) => { 
+            return Err(e);
+        }
+    };
+
+    db.execute("DELETE FROM agents", [])?;
+    Ok(())
+}
+
 pub fn get_agent(
     db_path: String,
     name: String,
@@ -114,9 +126,9 @@ pub fn get_agent(
 
     let mut stmt = db.prepare(
         "SELECT id, name, hostname, os, arch, listener_url, public_key, registered, last_commit
-            FROM agents WHERE name = ?1"
+            FROM agents WHERE id = ?1 OR name = ?2"
     )?;
-    let agent = stmt.query_row([name], |row| {
+    let agent = stmt.query_row([name.to_string(), name.to_string()], |row| {
         Ok(Agent::new(
             row.get(0)?,
             row.get(1)?,

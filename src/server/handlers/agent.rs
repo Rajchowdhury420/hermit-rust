@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::server::{
-    agents::format_agents,
+    agents::{format_agent_details, format_all_agents},
     db,
     server::Server,
 };
@@ -20,29 +20,110 @@ pub async fn handle_agent(
         "use" => {
             let ag_name = args[2].to_string();
 
-            let mut is_ok = false;
+            let mut found = false;
             for agent in agents {
                 if agent.id.to_string() == ag_name || agent.name == ag_name {
+                    found = true;
+
                     let _ = socket_lock.send(
                         Message::Text(format!("[agent:use:ok] {} {}", agent.name, agent.os))).await;
                     let _ = socket_lock.send(
                         Message::Text("[done]".to_owned())
                     ).await;
-                    is_ok = true;
+
                     break;
                 }
             }
 
-            if !is_ok {
+            if !found {
                 let _ = socket_lock.send(
                     Message::Text("[agent:use:error] Agent not found.".to_owned())
                 ).await;
                 let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
             }
         }
-        "list" => {
-            let output = format_agents(&mut agents);
+        "delete" => {
+            let ag_name = args[2].to_string();
+
+            if ag_name.as_str() == "all" {
+                match db::delete_all_agents(server_lock.db.path.to_string()) {
+                    Ok(_) => {
+                        let _ = socket_lock.send(
+                            Message::Text("[agent:delete:ok] All agents deleted successfully.".to_owned())
+                        ).await;
+                    }
+                    Err(e) => {
+                        let _ = socket_lock.send(
+                            Message::Text(
+                                format!("[agent:delete:error] Error deleting all agents: {:?}", e)
+                            )).await;
+                    }
+                }
+
+                let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+            } else {
+                let mut found = false;
+                for agent in agents {
+                    if agent.id.to_string() == ag_name || agent.name == ag_name {
+                        found = true;
+    
+                        match db::delete_agent(
+                            server_lock.db.path.to_string(),
+                            ag_name.to_string()
+                        ) {
+                            Ok(_) => {
+                                let _ = socket_lock.send(
+                                    Message::Text("[agent:delete:ok] Agent deleted successfully.".to_owned())
+                                ).await;
+                            }
+                            Err(e) => {
+                                let _ = socket_lock.send(
+                                    Message::Text(
+                                        format!("[agent:delete:error] Error deleting the agent: {:?}", e))
+                                ).await;
+                            }
+                        }
+    
+                        let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                        break;
+                    }
+                }
+    
+                if !found {
+                    let _ = socket_lock.send(
+                        Message::Text("[agent:delete:error] Agent not found.".to_owned())
+                    ).await;
+                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                }
+            }
+
+        }
+        "info" => {
+            let ag_name = args[2].to_string();
+            let agent = match db::get_agent(
+                server_lock.db.path.to_string(),
+                ag_name.to_string()
+            ) {
+                Ok(ag) => ag,
+                Err(_) => {
+                    let _ = socket_lock.send(Message::Text("[agent:info:error] Agent not found.".to_owned())).await;
+                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                    return;
+                }
+            };
+
+            let output = format_agent_details(agent);
             let _ = socket_lock.send(Message::Text(output)).await;
+            let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+        }
+        "list" => {
+            let output = format_all_agents(&mut agents);
+
+            if output == "" {
+                let _ = socket_lock.send(Message::Text("[agent:list:error] Agent not found.".to_owned())).await;
+            } else {
+                let _ = socket_lock.send(Message::Text(output)).await;
+            }
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
         }
         _ => {

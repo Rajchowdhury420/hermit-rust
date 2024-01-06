@@ -5,6 +5,7 @@ use super::listener::ListenerConfig;
 pub struct Config {
     pub listener: ListenerConfig,
     pub sleep: u64,
+    pub jitter: u64,
 
     pub server_public_key: PublicKey,
     pub my_secret_key: StaticSecret,
@@ -18,6 +19,7 @@ impl Config {
         host: String,
         port: u16,
         sleep: u64,
+        jitter: u64,
         user_agent: String,
         https_root_cert: String,
         https_client_cert: String,
@@ -38,6 +40,7 @@ impl Config {
                 https_client_key,
             ),
             sleep,
+            jitter,
             server_public_key,
             my_secret_key,
             my_public_key,

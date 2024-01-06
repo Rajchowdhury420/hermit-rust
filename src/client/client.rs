@@ -147,6 +147,7 @@ impl Client {
                                         listener_opt.proto.unwrap(),
                                         listener_opt.host.unwrap(),
                                         listener_opt.port.unwrap()));
+                                    send_flag = "[listener:add] Adding the listener...".to_string();
                                 } else {
                                     println!("Invalid command. Run `add help` for the usage.");
                                     continue;
@@ -156,6 +157,7 @@ impl Client {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
                                         message = Message::Text(format!("listener delete {}", name));
+                                        send_flag = "[listener:delete] Deleting the listener...".to_string();
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                     }
@@ -167,6 +169,7 @@ impl Client {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
                                         message = Message::Text(format!("listener start {}", name));
+                                        send_flag = "[listener:start] Starting the listener...".to_string();
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                     }
@@ -178,6 +181,20 @@ impl Client {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
                                         message = Message::Text(format!("listener stop {}", name));
+                                        send_flag = "[listener:stop] Stopping the listener...".to_string();
+                                    } else {
+                                        println!("Specify target listener by ID or name.");
+                                        continue;
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            }
+                            Operation::InfoListener => {
+                                if let Some(listener_opt) = commands.options.listener_opt {
+                                    if let Some(name) = listener_opt.name {
+                                        message = Message::Text(format!("listener info {}", name));
+                                        send_flag = "[listener:info] Getting the listener information...".to_string();
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                         continue;
@@ -188,6 +205,7 @@ impl Client {
                             }
                             Operation::ListListeners => {
                                 message = Message::Text("listener list".to_string());
+                                send_flag = "[listener:list] Getting the listener list...".to_string()
                             }
                             // Agent
                             Operation::UseAgent => {
@@ -196,29 +214,42 @@ impl Client {
 
                                     // Check if the agent exists
                                     message = Message::Text(format!("agent use {}", ag_name));
-
-                                    // Set send flag
-                                    send_flag = "[agent:use]".to_string();
+                                    send_flag = "[agent:use] Switching to the agent mode...".to_string();
+                                }
+                            }
+                            Operation::DeleteAgent => {
+                                if let Some(agent_opt) = commands.options.agent_opt {
+                                    let ag_name = agent_opt.name;
+                                    message = Message::Text(format!("agent delete {}", ag_name));
+                                    send_flag = "[agent:delete] Deleting the agent...".to_string();
+                                }
+                            }
+                            Operation::InfoAgent => {
+                                if let Some(agent_opt) = commands.options.agent_opt {
+                                    let ag_name = agent_opt.name;
+                                    message = Message::Text(format!("agent info {}", ag_name));
+                                    send_flag = "[agent:info] Getting the agent information...".to_string();
                                 }
                             }
                             Operation::ListAgents => {
                                 message = Message::Text("agent list".to_string());
+                                send_flag = "[agent:list] Getting the agent list...".to_string();
                             }
                             // Implant
                             Operation::GenerateImplant => {
                                 if let Some(implant_opt) = commands.options.implant_opt {
                                     let name = implant_opt.name.unwrap();
-                                    let listener_url = implant_opt.listener_url.unwrap();
+                                    let url = implant_opt.url.unwrap();
                                     let os = implant_opt.os.unwrap();
                                     let arch = implant_opt.arch.unwrap();
                                     let format = implant_opt.format.unwrap();
                                     let sleep = implant_opt.sleep.unwrap();
+                                    let jitter = implant_opt.jitter.unwrap();
 
                                     message = Message::Text(
-                                        format!("implant gen {} {} {} {} {} {}",
-                                            name, listener_url, os, arch, format, sleep));
-
-                                    send_flag = "[implant:gen]".to_string();
+                                        format!("implant gen {} {} {} {} {} {} {}",
+                                            name, url, os, arch, format, sleep, jitter));
+                                    send_flag = "[implant:gen] Generating the implant...".to_string();
                                 } else {
                                     continue;
                                 }
@@ -231,8 +262,7 @@ impl Client {
                                     message = Message::Text(
                                         format!("implant download {}", name)
                                     );
-
-                                    send_flag = "[implant:download]".to_string();
+                                    send_flag = "[implant:download] Downloading the implant...".to_string();
                                 } else {
                                     continue;
                                 }
@@ -244,12 +274,22 @@ impl Client {
                                     message = Message::Text(
                                         format!("implant delete {}", name)
                                     );
+                                    send_flag = "[implant:delete] Deleting the implant...".to_string();
+                                }
+                            }
+                            Operation::InfoImplant => {
+                                if let Some(implant_opt) = commands.options.implant_opt {
+                                    let name = implant_opt.name.unwrap();
 
-                                    send_flag = "[implant:delete]".to_string();
+                                    message = Message::Text(
+                                        format!("implant info {}", name)
+                                    );
+                                    send_flag = "[implant:info] Getting the information of implant...".to_string();
                                 }
                             }
                             Operation::ListImplants => {
                                 message = Message::Text("implant list".to_string());
+                                send_flag = "[implant:list] Getting the implant list...".to_string();
                             }
                             // Misc
                             Operation::Empty => {
@@ -265,35 +305,45 @@ impl Client {
 
                             // Agent operations
                             // Tasks
+                            Operation::AgentTaskCd => {
+                                let task_opt = commands.options.task_opt.unwrap();
+                                let t_agent = task_opt.agent_name.unwrap();
+                                let t_args = task_opt.args.unwrap();
+                                message = Message::Text(format!("task {} cd {}", t_agent, t_args));
+                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
+                            }
+                            Operation::AgentTaskLs => {
+                                let task_opt = commands.options.task_opt.unwrap();
+                                let t_agent = task_opt.agent_name.unwrap();
+                                let t_args = task_opt.args.unwrap();
+                                message = Message::Text(format!("task {} ls {}", t_agent, t_args));
+                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
+                            }
+                            Operation::AgentTaskPwd => {
+                                let task_opt = commands.options.task_opt.unwrap();
+                                let t_agent = task_opt.agent_name.unwrap();
+                                message = Message::Text(format!("task {} pwd", t_agent));
+                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
+                            }
                             Operation::AgentTaskScreenshot => {
-                                if let Some(task_opt) = commands.options.task_opt {
-                                    let t_agent = task_opt.agent_name.unwrap();
-
-                                    message = Message::Text(format!("task {} screenshot", t_agent));
-
-                                    send_flag = "[task:set]".to_string();
-                                } else {
-                                    continue;
-                                }
+                                let task_opt = commands.options.task_opt.unwrap();
+                                let t_agent = task_opt.agent_name.unwrap();
+                                message = Message::Text(format!("task {} screenshot", t_agent));
+                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
                             }
                             Operation::AgentTaskShell => {
-                                if let Some(task_opt) = commands.options.task_opt {
-                                    let t_agent = task_opt.agent_name.unwrap();
-                                    let t_command = task_opt.command.unwrap();
-
-                                    message = Message::Text(format!("task {} shell {}", t_agent, t_command));
-
-                                    send_flag = "[task:set]".to_string();
-                                } else{
-                                    continue;
-                                }
+                                let task_opt = commands.options.task_opt.unwrap();
+                                let t_agent = task_opt.agent_name.unwrap();
+                                let t_args = task_opt.args.unwrap();
+                                message = Message::Text(format!("task {} shell {}", t_agent, t_args));
+                                send_flag = "[task:set] Sending the task...".to_string();
                             }
                             // Misc
                             Operation::AgentEmpty => {
                                 continue;
                             }
                             Operation::AgentExit => {
-                                println!("{} Switch to the root mode.", "[+]".green());
+                                println!("{} Exit the agent mode.", "[+]".green());
                                 self.mode = Mode::Root;
                                 continue;
                             }
@@ -322,33 +372,14 @@ impl Client {
 
             // Spinner while waiting for responses
             let mut spin: Option<Spinner> = None;
-            match send_flag.as_str() {
-                "[agent:use]" => {
+            match shellwords::split(&send_flag) {
+                Ok(args) => {
                     spin = Some(Spinner::new(
                         Spinners::Dots8,
-                        "Checking the agent exists...".into()))
+                        args[1..].join(" ")
+                    ));
                 }
-                "[implant:gen]" => {
-                    spin = Some(Spinner::new(
-                        Spinners::Dots8,
-                        "Generating an implant...".into()));
-                }
-                "[implant:download]" => {
-                    spin = Some(Spinner::new(
-                        Spinners::Dots8,
-                        "Downloaing the implant...".into()));
-                }
-                "[implant:delete]" => {
-                    spin = Some(Spinner::new(
-                        Spinners::Dots8,
-                        "Deleting the implant...".into()));
-                }
-                "[task:set]" => {
-                    spin = Some(Spinner::new(
-                        Spinners::Dots8,
-                        "Waiting for the task result...".into()));
-                }
-                _ => {}
+                Err(_) => {}
             }
                     
             // Receive responses
@@ -371,42 +402,36 @@ impl Client {
 
                         match args[0].as_str() {
                             "[done]" => break,
+                            "[listener:add:ok]" | "[listener:delete:ok]" |
+                            "[listener:start:ok]" | "[listener:stop:ok]" |
+                            "[listener:list:ok]" |
+                            "[agent:delete:ok]" |
+                            "[implant:delete:ok]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[+]".green(), args[1..].join(" ").to_owned());
+                            }
+                            "[listener:add:error]" | "[listener:delete:error]" |
+                            "[listener:start:error]" | "[listener:stop:error]" |
+                            "[listener:info:error]" | "[listener:list:error]" |
+                            "[agent:use:error]" | "[agent:delete:error]" |
+                            "[agent:info:error]" | "[agent:list:error]" |
+                            "[implant:gen:error]" | "[implant:delete:error]" |
+                            "[implant:info:error]" | "[implant:list:error]" |
+                            "[task:error]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
+                            }
                             "[agent:use:ok]" => {
                                 // Switch to the agent mode
                                 self.mode = Mode::Agent(args[1].to_owned(), args[2].to_owned());
                                 stop_spin(&mut spin);
                                 println!("{} The agent found. Switch to the agent mode.", "[+]".green());
                             }
-                            "[agent:interact:error]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
-                            }
-                            "[implant:gen:ok:sending]" => {
-                                // Will receive binary data after that, so don't stop the spinner yet.
-                                recv_flag = args.join(" ");
-                            }
-                            "[implant:gen:ok:complete]" => {
-                                // Will receive binary data after that, so don't stop the spinner yet.
-                                recv_flag = args.join(" ");
-                            }
-                            "[implant:gen:error]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
-                            }
-                            "[implant:delete:ok]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[+]".green(), args[1..].join(" ").to_owned());
-                            }
-                            "[implant:delete:error]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
-                            }
+                            "[implant:gen:ok:sending]" |
+                            "[implant:gen:ok:complete]" |
                             "[task:screenshot:ok]" | "[task:shell:ok]" => {
+                                // Will receive binary data after that, so don't stop the spinner yet.
                                 recv_flag = args.join(" ");
-                            }
-                            "[task:error]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
                             }
                             _ => {
                                 stop_spin(&mut spin);

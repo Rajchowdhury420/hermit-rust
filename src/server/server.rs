@@ -151,6 +151,12 @@ impl Server {
 
         Ok(())
     }
+
+    pub async fn delete_all_listeners(&mut self) -> Result<(), Error> {
+        self.jobs = Arc::new(Mutex::new(Vec::new()));
+        db::delete_all_listeners(self.db.path.to_string()).unwrap();
+        Ok(())
+    }
 }
 
 pub async fn run(config: Config) {

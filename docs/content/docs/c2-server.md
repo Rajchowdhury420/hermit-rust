@@ -11,4 +11,4 @@ toc=true
 hermit server
 ```
 
-The C2 server start on `0.0.0.0:9999` by default.
+The C2 server will start on `0.0.0.0:9999` by default.

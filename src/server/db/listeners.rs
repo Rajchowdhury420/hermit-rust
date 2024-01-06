@@ -72,7 +72,6 @@ pub fn exists_listener(db_path: String, listener: Listener) -> Result<bool> {
     let exists = stmt.exists(
         [listener.protocol, listener.host, listener.port.to_string()]
     )?;
-    
     Ok(exists)
 }
 
@@ -88,6 +87,19 @@ pub fn delete_listener(db_path: String, listener_name: String) -> Result<()> {
         "DELETE FROM listeners WHERE name = ?1",
         [listener_name],
     )?;
+    
+    Ok(())
+}
+
+pub fn delete_all_listeners(db_path: String) -> Result<()> {
+    let db = match Connection::open(db_path) {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    db.execute("DELETE FROM listeners", [])?;
 
     Ok(())
 }

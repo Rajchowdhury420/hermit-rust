@@ -112,13 +112,41 @@ pub async fn find_job(jobs: &mut Vec<Job>, target: String) -> Option<&mut Job> {
     None
 }
 
-pub fn format_listeners(jobs: &Vec<Job>) -> String  {
+pub fn format_listener_details(job: &mut Job) -> String {
+    info!("Getting the listener details...");
+
+    let mut output = String::new();
+    output = output + "\n";
+    // output = output + "+" + "-".repeat(64).as_str() + "\n";
+    output = output + format!("{:<15} : {:<20}\n", "ID", job.id).as_str();
+    output = output + format!("{:<15} : {:<20}\n", "NAME", job.listener.name).as_str();
+    output = output + format!("{:<15} : {:<20}\n",
+        "DOMAINS", job.listener.hostnames.to_owned().join(",").to_string()).as_str();
+    output = output + format!("{:<15} : {:<20}\n",
+        "URL",
+        format!("{}://{}:{}/",
+            job.listener.protocol.to_string(),
+            job.listener.host.to_string(),
+            job.listener.port.to_string())).as_str();
+    output = output + format!("{:<15} : {:<20}\n",
+        "ACTIVE",
+        if job.running == true { "active".to_string().green() } else { "inactive".to_string().red() },).as_str();
+
+    output
+}
+
+pub fn format_all_listeners(jobs: &Vec<Job>) -> String  {
     info!("Getting listeners status...");
     if jobs.len() == 0 {
-        return String::from("No listeners found.");
+        return String::new();
     }
 
-    let mut output = format!("{:>5} | {:<20} | {:<20} | {:<32} | {:15}\n", "ID", "NAME", "HOSTS", "URL", "STATUS");
+    let mut output = String::new();
+    output = output + "\n";
+    output = output + format!(
+        "{:>5} | {:<20} | {:<20} | {:<32} | {:15}\n",
+        "ID", "NAME", "HOSTS", "URL", "STATUS",
+    ).as_str();
     output = output + "-".repeat(100).as_str() + "\n";
 
     for job in jobs {
@@ -134,5 +162,5 @@ pub fn format_listeners(jobs: &Vec<Job>) -> String  {
         ).as_str();
     }
 
-    return output;
+    output
 }

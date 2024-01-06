@@ -8,6 +8,7 @@ fn main() {
     let lhost = env::var_os("HERMIT_LHOST").unwrap();
     let lport = env::var_os("HERMIT_LPORT").unwrap();
     let sleep = env::var_os("HERMIT_SLEEP").unwrap();
+    let jitter = env::var_os("HERMIT_JITTER").unwrap();
     let user_agent = env::var_os("HERMIT_USER_AGENT").unwrap();
     let https_root_cert = env::var_os("HERMIT_HTTPS_ROOT_CERT").unwrap();
     let https_client_cert = env::var_os("HERMIT_HTTPS_CLIENT_CERT").unwrap();
@@ -24,13 +25,14 @@ fn main() {
             &'static str,
             u16,
             u64,
+            u64,
             &'static str,
             &'static str,
             &'static str,
             &'static str,
             &'static str,
         ) {}
-            (\"{}\", \"{}\", {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")
+            (\"{}\", \"{}\", {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")
         {}
         ",
         "{",
@@ -38,6 +40,7 @@ fn main() {
         lhost.into_string().unwrap(),
         lport.into_string().unwrap(),
         sleep.into_string().unwrap(),
+        jitter.into_string().unwrap(),
         user_agent.into_string().unwrap(),
         https_root_cert.into_string().unwrap(),
         https_client_cert.into_string().unwrap(),

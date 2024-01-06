@@ -24,14 +24,18 @@ pub enum Operation {
     DeleteListener,
     StartListener,
     StopListener,
+    InfoListener,
     ListListeners,
     // Agents
     UseAgent,
+    DeleteAgent,
+    InfoAgent,
     ListAgents,
     // Implants
     GenerateImplant,
     DownloadImplant,
     DeleteImplant,
+    InfoImplant,
     ListImplants,
 
     // Agent operations
@@ -40,6 +44,9 @@ pub enum Operation {
     AgentExit,
     AgentUnknown,
     // Tasks
+    AgentTaskCd,
+    AgentTaskLs,
+    AgentTaskPwd,
     AgentTaskScreenshot,
     AgentTaskShell,
 }
@@ -66,10 +73,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 }
                                 None => Some(Vec::new()),
                             };
-                            // let host = match subm2.get_one::<String>("host") {
-                            //     Some(h) => Some(h.to_string()),
-                            //     None => Some(client.server_host.to_string())
-                            // };
                             let listener_option = ListenerOption {
                                 name,
                                 domains,
@@ -82,7 +85,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         Some(("delete", subm2)) => {
                             op = Operation::DeleteListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(l) => { Some(l.to_owned()) },
+                                Some(n) => { Some(n.to_owned()) },
                                 None => { None },
                             };
         
@@ -97,7 +100,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         Some(("start", subm2)) => {
                             op = Operation::StartListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(l) => { Some(l.to_owned()) },
+                                Some(n) => { Some(n.to_owned()) },
                                 None => { None },
                             };
         
@@ -112,10 +115,25 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         Some(("stop", subm2)) => {
                             op = Operation::StopListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(l) => { Some(l.to_owned()) },
+                                Some(n) => { Some(n.to_owned()) },
                                 None => { None },
                             };
         
+                            options.listener_opt = Some(ListenerOption {
+                                name: target,
+                                domains: None,
+                                proto: None,
+                                host: None,
+                                port: None,
+                            });
+                        }
+                        Some(("info", subm2)) => {
+                            op = Operation::InfoListener;
+                            let target = match subm2.get_one::<String>("listener") {
+                                Some(n) => { Some(n.to_owned()) },
+                                None => { None },
+                            };
+
                             options.listener_opt = Some(ListenerOption {
                                 name: target,
                                 domains: None,
@@ -149,6 +167,28 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 name,
                             });
                         }
+                        Some(("delete", subm2)) => {
+                            op = Operation::DeleteAgent;
+                            let name = match subm2.get_one::<String>("name") {
+                                Some(n) => { n.to_owned() },
+                                None => { "0".to_owned() },
+                            };
+
+                            options.agent_opt = Some(AgentOption {
+                                name,
+                            });
+                        }
+                        Some(("info", subm2)) => {
+                            op = Operation::InfoAgent;
+                            let name = match subm2.get_one::<String>("name") {
+                                Some(n) => { n.to_owned() },
+                                None => { "0".to_owned() },
+                            };
+
+                            options.agent_opt = Some(AgentOption {
+                                name,
+                            });
+                        }
                         Some(("list", _)) => {
                             op = Operation::ListAgents;
                         }
@@ -169,9 +209,9 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 Some(n) => { n.to_owned() },
                                 None => { random_name("implant".to_owned()) }
                             };
-                            let listener_url = match subm2.get_one::<String>("listener") {
+                            let url = match subm2.get_one::<String>("url") {
                                 Some(n) => { n.to_owned() },
-                                None => { "http://127.0.0.1:8000/".to_owned() }
+                                None => { "http://localhost:4443/".to_owned() }
                             };
                             let os = match subm2.get_one::<String>("os") {
                                 Some(n) => { n.to_owned() },
@@ -189,14 +229,19 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 Some(n) => { *n },
                                 None => { 3 }
                             };
+                            let jitter = match subm2.get_one::<u64>("jitter") {
+                                Some(j) => { *j },
+                                None => { 5 }
+                            };
         
                             options.implant_opt = Some(ImplantOption {
                                 name: Some(name),
-                                listener_url: Some(listener_url),
+                                url: Some(url),
                                 os: Some(os),
                                 arch: Some(arch),
                                 format: Some(format),
                                 sleep: Some(sleep),
+                                jitter: Some(jitter),
                             });
                         }
                         Some(("download", subm2)) => {
@@ -208,11 +253,12 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
         
                             options.implant_opt = Some(ImplantOption {
                                 name: Some(name),
-                                listener_url: None,
+                                url: None,
                                 os: None,
                                 arch: None,
                                 format: None,
                                 sleep: None,
+                                jitter: None,
                             });
                         }
                         Some(("delete", subm2)) => {
@@ -224,11 +270,29 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
 
                             options.implant_opt = Some(ImplantOption {
                                 name: Some(name),
-                                listener_url: None,
+                                url: None,
                                 os: None,
                                 arch: None,
                                 format: None,
                                 sleep: None,
+                                jitter: None,
+                            });
+                        }
+                        Some(("info", subm2)) => {
+                            op = Operation::InfoImplant;
+                            let name = match subm2.get_one::<String>("name") {
+                                Some(n) => n.to_owned(),
+                                None => "0".to_owned(),
+                            };
+
+                            options.implant_opt = Some(ImplantOption {
+                                name: Some(name),
+                                url: None,
+                                os: None,
+                                arch: None,
+                                format: None,
+                                sleep: None,
+                                jitter: None,
                             });
                         }
                         Some(("list", _)) => {
@@ -257,11 +321,44 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
         Mode::Agent(agent_name, agent_os) => {
             match matches.subcommand() {
                 // Tasks
+                Some(("cd", subm)) => {
+                    op = Operation::AgentTaskCd;
+
+                    let dir = match subm.get_one::<String>("directory") {
+                        Some(d) => d.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(dir),
+                    });
+                }
+                Some(("ls", subm)) => {
+                    op = Operation::AgentTaskLs;
+
+                    let dir = match subm.get_one::<String>("directory") {
+                        Some(d) => d.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(dir),
+                    });
+                }
+                Some(("pwd", _)) => {
+                    op = Operation::AgentTaskPwd;
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: None,
+                    });
+                }
                 Some(("screenshot", _)) => {
                     op = Operation::AgentTaskScreenshot;
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),
-                        command: None,
+                        args: None,
                     });
                 }
                 Some(("shell", subm)) => {
@@ -270,13 +367,13 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     match agent_os.as_str() {
                         "linux" => {
                             let command = match subm.get_one::<String>("command") {
-                                Some(c) => { c.to_owned() }
-                                None => { "".to_owned() }
+                                Some(c) => c.to_owned(),
+                                None => "".to_owned(),
                             };
 
                             options.task_opt = Some(TaskOption {
                                 agent_name: Some(agent_name.to_owned()),
-                                command: Some(command),
+                                args: Some(command),
                             });
                         }
                         "windows" | _ => {
@@ -285,13 +382,13 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 pre = "powershell";
                             }
                             let command = match subm.get_one::<String>("command") {
-                                Some(c) => { c.to_owned() }
-                                None => { "".to_owned() }
+                                Some(c) => c.to_owned(),
+                                None => "".to_owned(),
                             };
         
                             options.task_opt = Some(TaskOption {
                                 agent_name: Some(agent_name.to_owned()),
-                                command: Some(pre.to_string() + " " + command.as_str()),
+                                args: Some(pre.to_string() + " " + command.as_str()),
                             });
                         }
                     }

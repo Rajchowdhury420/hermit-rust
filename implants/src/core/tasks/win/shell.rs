@@ -19,6 +19,7 @@ use windows::{
             Pipes::{CreatePipe, PeekNamedPipe},
             Threading::{
                 CreateProcessW,
+                GetExitCodeProcess,
                 PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
                 STARTF_USESHOWWINDOW, STARTF_USESTDHANDLES,
                 STARTUPINFOW,
@@ -60,13 +61,15 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
 
     let command = match args[0].as_str() {
         "cmd" => "cmd.exe /c ".to_string() + args[1..].join(" ").as_str(),
-        "powershell" => "powershell.exe /c ".to_string() + args[1..].join(" ").as_str(),
+        // "powershell" => "powershell.exe /c ".to_string() + args[1..].join(" ").as_str(),
+        "powershell" => "powershell.exe -noP -sta -w 1 ".to_string() + args[1..].join(" ").as_str(),
         _ => {
             return Err(Error::from_win32());
         },
     };
 
-    let mut command = OsStr::new(&command).encode_wide().collect::<Vec<_>>();
+    // let mut command = OsStr::new(&command).encode_wide().collect::<Vec<_>>();
+    let mut command = OsStr::new(&command).encode_wide().collect::<Vec<u16>>();
 
     let inherit_handles = true;
     let creation_flags = PROCESS_CREATION_FLAGS(0);
@@ -84,7 +87,8 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
     let current_dir = std::env::current_dir().unwrap();
     let current_dir = Some(current_dir.as_path());
     let current_dir_ptr = current_dir
-        .map(|path| path.as_os_str().encode_wide().collect::<Vec<_>>())
+        // .map(|path| path.as_os_str().encode_wide().collect::<Vec<_>>())
+        .map(|path| path.as_os_str().encode_wide().collect::<Vec<u16>>())
         .map(|wide_path| wide_path.as_ptr())
         .unwrap_or(std::ptr::null_mut());
 
@@ -110,11 +114,9 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
 
         let mut bprocessend = false;
         while !bprocessend {
-            // println!("Retrieving the result");
             bprocessend = WaitForSingleObject(pi.hProcess, 50) == WAIT_OBJECT_0;
 
             loop {
-                // println!("Start writing buffer...");
                 let mut buf = [0u8; 1024];
                 let mut dwread: u32 = 0;
                 let mut dwavail: u32 = 0;
@@ -144,8 +146,6 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
                     println!("Error reading file.");
                     break;
                 }
-                
-                // println!("dwread: {}", dwread);
 
                 buf[dwread as usize] = 0;
                 output.extend(buf.to_vec());
@@ -154,7 +154,7 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
             }
         }
 
-        // GetExitCodeProcess(pi.hProcess, 0);
+        // GetExitCodeProcess(pi.hProcess, 0 as *mut u32);
 
         CloseHandle(hwritepipe);
         CloseHandle(hreadpipe);

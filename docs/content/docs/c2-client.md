@@ -65,16 +65,22 @@ Listeners that you don't plan to use can be deleted using the `delete` command.
 Hermit $ listener delete 1
 ```
 
+If you want to delete all listeners, specify `all` to the second argument as below:
+
+```sh
+Hermit $ listener delete all
+```
+
 <br />
 
 ## Implant
 
-### Generate Implant
+### 1. Generate Implant
 
-You can generate implants with `implant gen` command with specifying the listener URL (`-l`) that you've started the previous section. The agent will connect to this listener URL.
+You can generate implants with `implant gen` command with specifying the listener URL (`-u`) that you've started the previous section. The agent will connect to this listener URL.
 
 ```sh
-Hermit $ implant gen -l https://my-c2-server.com:4443/
+Hermit $ implant gen -u https://my-c2-server.com:4443/
 ```
 
 After generating, you can see the information by `implants` (or `implant list`) command.
@@ -84,6 +90,18 @@ Hermit $ implants
 ```
 
 Now you need to transfer this implant to the target computer and execute it.
+
+### 2. Delete Implant
+
+```sh
+Hermit $ implant delete 1
+```
+
+If you want to delete all implants, specify `all` to the second argument as below:
+
+```sh
+Hermit $ implant delete all
+```
 
 <br />
 
@@ -96,8 +114,6 @@ If it succeeds, the agent has been registered in the C2 server. You can check if
 Hermit $ agents
 ```
 
-<br />
-
 ### 1. Interact with Agent
 
 To interact with the agent for the attack simulation, you can run the `agent use <ID or Name>` command.
@@ -107,8 +123,6 @@ Hermit $ agent use 1
 ```
 
 This command switches to the agent mode.
-
-<br />
 
 ### 2. Agent Mode: Send Tasks
 
@@ -132,6 +146,18 @@ To quit the agent mode and return the home console, run the `exit` command.
 
 ```sh
 Hermit [agetn: agent_0123] $ exit
+```
+
+### 4. Delete Agent
+
+```sh
+Hermit $ agent delete 1
+```
+
+If you want to delete all agents, specify `all` to the second argument as below:
+
+```sh
+Hermit $ agent delete all
 ```
 
 <br />
