@@ -43,12 +43,7 @@ pub enum Operation {
     AgentEmpty,
     AgentExit,
     AgentUnknown,
-    // Tasks
-    AgentTaskCd,
-    AgentTaskLs,
-    AgentTaskPwd,
-    AgentTaskScreenshot,
-    AgentTaskShell,
+    AgentTask(String), // The argument is the task name
 }
 
 pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Options) {
@@ -321,8 +316,22 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
         Mode::Agent(agent_name, agent_os) => {
             match matches.subcommand() {
                 // Tasks
+                Some(("cat", subm)) => {
+                    op = Operation::AgentTask("cat".to_string());
+
+                    let file = match subm.get_one::<String>("file") {
+                        Some(f) => f.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(file),
+                    });                    
+                }
                 Some(("cd", subm)) => {
-                    op = Operation::AgentTaskCd;
+                    // op = Operation::AgentTaskCd;
+                    op = Operation::AgentTask("cd".to_string());
 
                     let dir = match subm.get_one::<String>("directory") {
                         Some(d) => d.to_owned(),
@@ -334,8 +343,17 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         args: Some(dir),
                     });
                 }
+                Some(("info", _)) => {
+                    op = Operation::AgentTask("info".to_string());
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: None,
+                    });
+                }
                 Some(("ls", subm)) => {
-                    op = Operation::AgentTaskLs;
+                    // op = Operation::AgentTaskLs;
+                    op = Operation::AgentTask("ls".to_string());
 
                     let dir = match subm.get_one::<String>("directory") {
                         Some(d) => d.to_owned(),
@@ -348,21 +366,40 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     });
                 }
                 Some(("pwd", _)) => {
-                    op = Operation::AgentTaskPwd;
+                    // op = Operation::AgentTaskPwd;
+                    op = Operation::AgentTask("pwd".to_string());
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),
                         args: None,
                     });
                 }
+                Some(("rm", subm)) => {
+                    // op = Operation::AgentTaskRm;
+                    op = Operation::AgentTask("rm".to_string());
+                    let mut file = match subm.get_one::<String>("file") {
+                        Some(f) => f.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    if subm.get_flag("recursive") {
+                        file = file + " -r";
+                    }
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(file),
+                    });
+                }
                 Some(("screenshot", _)) => {
-                    op = Operation::AgentTaskScreenshot;
+                    // op = Operation::AgentTaskScreenshot;
+                    op = Operation::AgentTask("screenshot".to_string());
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),
                         args: None,
                     });
                 }
                 Some(("shell", subm)) => {
-                    op = Operation::AgentTaskShell;
+                    op = Operation::AgentTask("shell".to_string());
 
                     match agent_os.as_str() {
                         "linux" => {
@@ -393,6 +430,26 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         }
                     }
 
+                }
+                Some(("sleep", subm)) => {
+                    op = Operation::AgentTask("sleep".to_string());
+
+                    let sleeptime = match subm.get_one::<u64>("time") {
+                        Some(t) => *t,
+                        None => 3 as u64,
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(sleeptime.to_string()),
+                    });
+                }
+                Some(("whoami", _)) => {
+                    op = Operation::AgentTask("whoami".to_string());
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: None,
+                    });
                 }
                 // Misc
                 Some(("exit", _)) | Some(("quit", _)) => {

@@ -305,38 +305,21 @@ impl Client {
 
                             // Agent operations
                             // Tasks
-                            Operation::AgentTaskCd => {
+                            Operation::AgentTask(task) => {
                                 let task_opt = commands.options.task_opt.unwrap();
                                 let t_agent = task_opt.agent_name.unwrap();
-                                let t_args = task_opt.args.unwrap();
-                                message = Message::Text(format!("task {} cd {}", t_agent, t_args));
+                                let t_args = match task_opt.args {
+                                    Some(a) => a,
+                                    None => "".to_string(),
+                                };
+
+                                if t_args == "" {
+                                    message = Message::Text(format!("task {} {}", t_agent, task));
+                                } else {
+                                    message = Message::Text(format!("task {} {} {}", t_agent, task, t_args));
+                                }
+
                                 send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
-                            }
-                            Operation::AgentTaskLs => {
-                                let task_opt = commands.options.task_opt.unwrap();
-                                let t_agent = task_opt.agent_name.unwrap();
-                                let t_args = task_opt.args.unwrap();
-                                message = Message::Text(format!("task {} ls {}", t_agent, t_args));
-                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
-                            }
-                            Operation::AgentTaskPwd => {
-                                let task_opt = commands.options.task_opt.unwrap();
-                                let t_agent = task_opt.agent_name.unwrap();
-                                message = Message::Text(format!("task {} pwd", t_agent));
-                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
-                            }
-                            Operation::AgentTaskScreenshot => {
-                                let task_opt = commands.options.task_opt.unwrap();
-                                let t_agent = task_opt.agent_name.unwrap();
-                                message = Message::Text(format!("task {} screenshot", t_agent));
-                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
-                            }
-                            Operation::AgentTaskShell => {
-                                let task_opt = commands.options.task_opt.unwrap();
-                                let t_agent = task_opt.agent_name.unwrap();
-                                let t_args = task_opt.args.unwrap();
-                                message = Message::Text(format!("task {} shell {}", t_agent, t_args));
-                                send_flag = "[task:set] Sending the task...".to_string();
                             }
                             // Misc
                             Operation::AgentEmpty => {
@@ -409,6 +392,10 @@ impl Client {
                             "[implant:delete:ok]" => {
                                 stop_spin(&mut spin);
                                 println!("{} {}", "[+]".green(), args[1..].join(" ").to_owned());
+                            }
+                            "[listener:start:warn]" | "[listener:stop:warn]" => {
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[!]".yellow(), args[1..].join(" ").to_owned());
                             }
                             "[listener:add:error]" | "[listener:delete:error]" |
                             "[listener:start:error]" | "[listener:stop:error]" |

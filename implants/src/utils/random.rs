@@ -19,8 +19,6 @@ pub fn random_string(length: usize) -> String {
 
 pub fn random_sleeptime(sleep: u64, jitter: u64) -> Duration {
     let mut rng = thread_rng();
-
-    let random_sleeptime = rng.gen_range(0..(2 * jitter + 1)) - jitter;
-
+    let random_sleeptime = rng.gen_range(0..jitter);
     Duration::from_secs(sleep + random_sleeptime)
 }

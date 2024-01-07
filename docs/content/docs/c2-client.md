@@ -126,17 +126,11 @@ This command switches to the agent mode.
 
 ### 2. Agent Mode: Send Tasks
 
-After entering the agent mode, you can simulate various attack methods e.g. shell command, screenshot, etc. Other commands are currently under development.
-
-- **Shell Command**
+After switching the agent mode, you can simulate various attacks e.g. enumeration, shell command, screenshot, etc.
 
 ```sh
-Hermit [agent: agent_0123] $ shell whoami
-```
-
-- **Screenshot**
-
-```sh
+Hermit [agent: agent_0123] $ whoami
+Hermit [agent: agent_0123] $ cat /etc/passwd
 Hermit [agetn: agent_0123] $ screenshot
 ```
 

