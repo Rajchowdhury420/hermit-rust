@@ -376,6 +376,32 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         args: Some(dir),
                     });
                 }
+                Some(("net", subm)) => {
+                    op = Operation::AgentTask("net".to_string());
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: None,
+                    });
+                }
+                Some(("ps", subm)) => {
+                    op = Operation::AgentTask("ps".to_string());
+
+                    let filter = match subm.get_one::<String>("filter") {
+                        Some(f) => f.to_owned(),
+                        None => "*".to_owned(),
+                    };
+
+                    let exclude = match subm.get_one::<String>("exclude") {
+                        Some(x) => x.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(filter + ":" + exclude.as_str()),
+                    });
+                }
                 Some(("pwd", _)) => {
                     op = Operation::AgentTask("pwd".to_string());
                     options.task_opt = Some(TaskOption {

