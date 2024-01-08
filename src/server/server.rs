@@ -318,7 +318,6 @@ async fn handle_message(
                         text.to_owned(),
                         args,
                         &mut socket_lock,
-                        Arc::clone(&server),
                     ).await;
                 }
                 _ => {

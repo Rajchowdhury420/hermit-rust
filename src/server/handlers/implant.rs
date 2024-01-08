@@ -68,7 +68,7 @@ pub async fn handle_implant(
                 i_jitter,
             ) {
                 Ok((output, mut buffer)) => {
-                    let _ = send_implant_binary(
+                    let _ = send_implant_chunks(
                         &mut buffer,
                         socket_lock,
                         output.to_owned(),
@@ -129,7 +129,7 @@ pub async fn handle_implant(
                     imp.jitter,
                 ) {
                     Ok((output, mut buffer)) => {
-                        let _ = send_implant_binary(
+                        let _ = send_implant_chunks(
                             &mut buffer,
                             socket_lock,
                             output.to_owned(),
@@ -222,7 +222,8 @@ pub async fn handle_implant(
     }
 }
 
-async fn send_implant_binary(
+// Implant's data size is heavy so send it in chunks.
+async fn send_implant_chunks(
     buffer: &mut Vec<u8>,
     socket_lock: &mut MutexGuard<'_, WebSocket>,
     output: String,
@@ -242,7 +243,7 @@ async fn send_implant_binary(
     // let mut buf_split: Vec<Vec<u8>> = Vec::new();
 
     // Split buffer    
-    let mut buffer2 = buffer.split_off(split_size);
+    let buffer2 = buffer.split_off(split_size);
     
     let _ = socket_lock.send(
         Message::Text("[implant:gen:ok:sending]".to_owned())).await;

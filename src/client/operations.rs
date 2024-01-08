@@ -330,7 +330,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     });                    
                 }
                 Some(("cd", subm)) => {
-                    // op = Operation::AgentTaskCd;
                     op = Operation::AgentTask("cd".to_string());
 
                     let dir = match subm.get_one::<String>("directory") {
@@ -343,6 +342,19 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         args: Some(dir),
                     });
                 }
+                Some(("download", subm)) => {
+                    op = Operation::AgentTask("download".to_string());
+
+                    let file = match subm.get_one::<String>("file") {
+                        Some(f) => f.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(file),
+                    });
+                }
                 Some(("info", _)) => {
                     op = Operation::AgentTask("info".to_string());
 
@@ -352,7 +364,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     });
                 }
                 Some(("ls", subm)) => {
-                    // op = Operation::AgentTaskLs;
                     op = Operation::AgentTask("ls".to_string());
 
                     let dir = match subm.get_one::<String>("directory") {
@@ -366,7 +377,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     });
                 }
                 Some(("pwd", _)) => {
-                    // op = Operation::AgentTaskPwd;
                     op = Operation::AgentTask("pwd".to_string());
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),
@@ -374,7 +384,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     });
                 }
                 Some(("rm", subm)) => {
-                    // op = Operation::AgentTaskRm;
                     op = Operation::AgentTask("rm".to_string());
                     let mut file = match subm.get_one::<String>("file") {
                         Some(f) => f.to_owned(),
@@ -391,7 +400,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                     });
                 }
                 Some(("screenshot", _)) => {
-                    // op = Operation::AgentTaskScreenshot;
                     op = Operation::AgentTask("screenshot".to_string());
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),

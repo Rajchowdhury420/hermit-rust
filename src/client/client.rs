@@ -414,9 +414,8 @@ impl Client {
                                 stop_spin(&mut spin);
                                 println!("{} The agent found. Switch to the agent mode.", "[+]".green());
                             }
-                            "[implant:gen:ok:sending]" |
-                            "[implant:gen:ok:complete]" |
-                            "[task:screenshot:ok]" | "[task:shell:ok]" => {
+                            "[implant:gen:ok:sending]" | "[implant:gen:ok:complete]" |
+                            "[task:ok]" | "[task:download:ok]" | "[task:screenshot:ok]" => {
                                 // Will receive binary data after that, so don't stop the spinner yet.
                                 recv_flag = args.join(" ");
                             }
@@ -455,6 +454,21 @@ impl Client {
                                     "{} Transfer this file to target machine and execute it to interact with our C2 server.",
                                     "[i]".green());
                             }
+                            "[task:ok]" => {
+                                // TODO: Fix garbled characters other than English.
+                                let result_string = String::from_utf8_lossy(&bytes).to_string();
+                                stop_spin(&mut spin);
+                                println!("{} {}", "[+]".green(), result_string);
+                            }
+                            "[task:download:ok]" => {
+                                let outfile = args[1].to_string();
+                                write_file(outfile.to_string(), &bytes).unwrap();
+                                stop_spin(&mut spin);
+                                println!(
+                                    "{} File downloaded at {}",
+                                    "[+]".green(),
+                                    format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
+                            }
                             "[task:screenshot:ok]" => {
                                 let outfile = args[1].to_string();
                                 write_file(outfile.to_string(), &bytes).unwrap();
@@ -463,12 +477,6 @@ impl Client {
                                     "{} Screenshot saved at {}",
                                     "[+]".green(),
                                     format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
-                            }
-                            "[task:shell:ok]" => {
-                                // TODO: Fix garbled characters other than English.
-                                let result_string = String::from_utf8_lossy(&bytes).to_string();
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[+]".green(), result_string);
                             }
                             _ => {}
                         }

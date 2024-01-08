@@ -116,7 +116,6 @@ pub async fn start_https_listener(
         info!("Connection {remote_addr} accepted.");
 
         let tower_service = app.clone();
-
         let close_rx = close_rx.clone();
 
         tokio::spawn(async move {
@@ -199,8 +198,9 @@ async fn register(
 
     match db::add_agent(db_path, agent.clone()) {
         Ok(_) => {
-            mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
+            mkdir(format!("agents/{}/downloads", agent.name.to_owned())).unwrap();
             mkdir(format!("agents/{}/screenshots", agent.name.to_owned())).unwrap();
+            mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
 
