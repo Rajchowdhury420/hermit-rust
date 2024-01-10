@@ -47,21 +47,49 @@ It's prohibited to use on systems not under your control.
 ## USAGE
 
 <!-- Plese refer to [https://hermit.hdks.org/](the docs) for more details. -->
-Plese refer to [the documentation](/docs) for more details.
+Please refer to [the documentation](/docs) for more details.
 
 ### C2 Server
 
 ```sh
-hermit server
+$ hermit server
+
+
+        ┓┏┏┓┳┓┳┳┓┳┏┳┓
+        ┣┫┣ ┣┫┃┃┃┃ ┃
+        ┛┗┗┛┛┗┛ ┗┻ ┻
+          C2 SERVER
+      +++++++++++++++++
+      DEVELOPED BY HDKS
+
+[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/ubuntu/.hermit/server/listeners/listener_3943635548/certs/cert.pem created successfully.
+[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/ubuntu/.hermit/server/listeners/listener_3943635548/certs/key.pem created successfully.
+[2024-01-10T13:59:41Z WARN  hermit::server::db::listeners] Listener already exists in database.
+[2024-01-10T13:59:41Z INFO  hermit::server::server] listening on 0.0.0.0:9999
 ```
 
 ### C2 Client
 
 ```sh
-# Connect to C2 server
-hermit client -H my-c2-server.com -P 9999
+$ hermit client -H 0.0.0.0 -P 9999
 
-# Print the usage.
+
+        ┓┏┏┓┳┓┳┳┓┳┏┳┓
+        ┣┫┣ ┣┫┃┃┃┃ ┃
+        ┛┗┗┛┛┗┛ ┗┻ ┻
+          C2 CLIENT
+      +++++++++++++++++
+      DEVELOPED BY HDKS
+
+[+] Handshake has been completed.
+[+] Connected to C2 server (ws://0.0.0.0:9999/hermit) successfully.
+
+Hermit $
+```
+
+To print the usage:
+
+```sh
 Hermit $ help
 ```
 

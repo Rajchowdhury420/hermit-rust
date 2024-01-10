@@ -223,6 +223,7 @@ pub async fn handle_implant(
 }
 
 // Implant's data size is heavy so send it in chunks.
+// TODO: This code is not clean so I need to defactor it.
 async fn send_implant_chunks(
     buffer: &mut Vec<u8>,
     socket_lock: &mut MutexGuard<'_, WebSocket>,
@@ -230,7 +231,7 @@ async fn send_implant_chunks(
 ) {
     let split_size: usize = 10000000;
 
-    if buffer.len() < split_size {
+    if buffer.len() <= split_size {
         let _ = socket_lock.send(
             Message::Text(format!(
                 "[implant:gen:ok:complete] {}",
@@ -240,19 +241,36 @@ async fn send_implant_chunks(
         return;
     }
 
-    // let mut buf_split: Vec<Vec<u8>> = Vec::new();
+    let mut buffer2 = buffer.split_off(split_size);
 
-    // Split buffer    
-    let buffer2 = buffer.split_off(split_size);
-    
+    if buffer2.len() <= split_size {
+        let _ = socket_lock.send(
+            Message::Text("[implant:gen:ok:sending]".to_owned())).await;
+        let _ = socket_lock.send(Message::Binary(buffer.to_vec())).await;
+
+        let _ = socket_lock.send(
+            Message::Text(format!(
+                "[implant:gen:ok:complete] {}",
+                output,
+            ))).await;
+        let _ = socket_lock.send(Message::Binary(buffer2.to_vec())).await;
+        return;
+    }
+
+    let mut buffer3 = buffer2.split_off(split_size);
+
     let _ = socket_lock.send(
         Message::Text("[implant:gen:ok:sending]".to_owned())).await;
     let _ = socket_lock.send(Message::Binary(buffer.to_vec())).await;
+
+    let _ = socket_lock.send(
+        Message::Text("[implant:gen:ok:sending]".to_owned())).await;
+    let _ = socket_lock.send(Message::Binary(buffer2.to_vec())).await;
 
     let _ = socket_lock.send(
         Message::Text(format!(
             "[implant:gen:ok:complete] {}",
             output,
         ))).await;
-    let _ = socket_lock.send(Message::Binary(buffer2.to_vec())).await;
+    let _ = socket_lock.send(Message::Binary(buffer3.to_vec())).await;
 }
