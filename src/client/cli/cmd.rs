@@ -220,7 +220,7 @@ pub fn create_cmd(client: &Client) -> Command {
                         .value_parser(value_parser!(String)))
                 )
                 .subcommand(Command::new("download")
-                    .about("Download a file.")
+                    .about("Download a file from target computer.")
                     .arg(Arg::new("file")
                         .help("Specified file to download.")
                         .required(true)
@@ -297,17 +297,19 @@ pub fn create_cmd(client: &Client) -> Command {
                 )
                 .subcommand(Command::new("shellcode")
                     // Shellcode generation example with Msfvenom:
-                    //   `msfvenom -p windows/x64/exec CMD="calc.exe" -f base64`
-                    .about("Inject a shellcode for executing arbitrary commands in the process.")
+                    //   `msfvenom -p windows/x64/exec CMD="calc.exe" -f hex -o shellcode.txt`
+                    .about("Inject a shellcode for executing arbitrary commands in the new created process.")
                     .args([
                         Arg::new("process")
                             .short('p')
                             .long("process")
                             .help("Specified process name (e.g. 'svchost') to inject the shellcode.")
                             .required(true)
-                            .value_parser(value_parser!(u32)),
-                        Arg::new("shellcode")
-                            .help("Base64-encoded shellcode.")
+                            .value_parser(value_parser!(String)),
+                        Arg::new("file")
+                            .short('f')
+                            .long("file")
+                            .help("Path to shellcode file e.g. 'shellcode.txt'.")
                             .required(true)
                             .value_parser(value_parser!(String))
                     ])
@@ -320,7 +322,7 @@ pub fn create_cmd(client: &Client) -> Command {
                             .value_parser(value_parser!(u64)))
                 )
                 .subcommand(Command::new("upload")
-                    .about("Upload a file. (Under development)")
+                    .about("Upload a file to target computer. (Under development)")
                     .arg(Arg::new("file")
                             .help("Specified file to upload.")
                             .required(true)

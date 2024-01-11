@@ -62,8 +62,8 @@ $ hermit server
       +++++++++++++++++
       DEVELOPED BY HDKS
 
-[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/ubuntu/.hermit/server/listeners/listener_3943635548/certs/cert.pem created successfully.
-[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/ubuntu/.hermit/server/listeners/listener_3943635548/certs/key.pem created successfully.
+[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/user/.hermit/server/listeners/listener_3943635548/certs/cert.pem created successfully.
+[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/user/.hermit/server/listeners/listener_3943635548/certs/key.pem created successfully.
 [2024-01-10T13:59:41Z WARN  hermit::server::db::listeners] Listener already exists in database.
 [2024-01-10T13:59:41Z INFO  hermit::server::server] listening on 0.0.0.0:9999
 ```

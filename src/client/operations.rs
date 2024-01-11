@@ -1,3 +1,4 @@
+use base64::prelude::*;
 use clap::ArgMatches;
 
 use super::{
@@ -17,6 +18,7 @@ pub enum Operation {
     // Root operations
     // Common
     Empty,
+    Error(String),
     Exit,
     Unknown,
     // Listeners
@@ -473,9 +475,23 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         None => "svchost".to_string(),
                     };
 
-                    let shellcode = match subm.get_one::<String>("shellcode") {
-                        Some(c) => c.to_string(),
-                        None => "none".to_string(),
+                    let shellcode = match subm.get_one::<String>("file") {
+                        Some(f) => {
+                            let shellcode = match std::fs::read(f.to_string()) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    // println!("Error reading shellcode file: {}", e);
+                                    op = Operation::Error(format!("Error reading shellcode file: {}", e));
+                                    "nop".as_bytes().to_vec()
+                                }
+                            };
+
+                            base64::prelude::BASE64_STANDARD.encode(shellcode)
+                        },
+                        None => {
+                            op = Operation::Error("Shellcode file not specified.".to_string());
+                            base64::prelude::BASE64_STANDARD.encode("nop".as_bytes().to_vec())
+                        },
                     };
 
                     options.task_opt = Some(TaskOption {

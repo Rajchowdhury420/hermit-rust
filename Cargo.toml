@@ -16,6 +16,7 @@ categories = ["command-line-utilities"]
 aes-gcm-siv = "0.11.1"
 axum = { version = "0.7.2", features = ["ws"] }
 axum-extra = { version = "0.9.0", features = ["typed-header"] }
+base64 = "0.21.6"
 cc = "1.0"
 chrono = "0.4.31"
 clap = { version = "4.4.8", features = ["derive"] }

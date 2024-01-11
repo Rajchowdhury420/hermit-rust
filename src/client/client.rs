@@ -295,6 +295,10 @@ impl Client {
                             Operation::Empty => {
                                 continue;
                             }
+                            Operation::Error(e) => {
+                                println!("Error: {}", e);
+                                continue;
+                            }
                             Operation::Exit => {
                                 process::exit(EXIT_SUCCESS);
                             }

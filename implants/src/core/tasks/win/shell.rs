@@ -60,15 +60,14 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
     };
 
     let command = match args[0].as_str() {
-        "cmd" => "cmd.exe /c ".to_string() + args[1..].join(" ").as_str(),
-        // "powershell" => "powershell.exe /c ".to_string() + args[1..].join(" ").as_str(),
-        "powershell" => "powershell.exe -noP -sta -w 1 ".to_string() + args[1..].join(" ").as_str(),
+        "cmd" => "cmd.exe /c ".to_string() + args[1..].join(" ").as_str() + "\0",
+        // "powershell" => "powershell.exe /c ".to_string() + args[1..].join(" ").as_str() + "\0",
+        "powershell" => "powershell.exe -noP -sta -w 1 ".to_string() + args[1..].join(" ").as_str() + "\0",
         _ => {
             return Err(Error::from_win32());
         },
     };
 
-    // let mut command = OsStr::new(&command).encode_wide().collect::<Vec<_>>();
     let mut command = OsStr::new(&command).encode_wide().collect::<Vec<u16>>();
 
     let inherit_handles = true;
@@ -117,7 +116,9 @@ pub async fn shell(command: String) -> Result<Vec<u8>, Error> {
             bprocessend = WaitForSingleObject(pi.hProcess, 50) == WAIT_OBJECT_0;
 
             loop {
-                let mut buf = [0u8; 1024];
+                // let mut buf = [0u8; 1024];
+                let mut buf = [0u8; 4096];
+                // let mut buf: Vec<u8> = Vec::new();
                 let mut dwread: u32 = 0;
                 let mut dwavail: u32 = 0;
 

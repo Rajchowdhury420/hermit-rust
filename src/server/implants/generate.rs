@@ -75,13 +75,16 @@ pub fn generate(
 
     let outdir = format!("{}/implants/{}", get_app_dir(), name.to_string());
 
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let implants_manifest_path = format!("--manifest-path={}/implants/Cargo.toml", manifest_dir.to_string());
+
     let (cmd, args, outfile) = match (os.as_str(), arch.as_str(), format.as_str()) {
         ("linux", "amd64", "elf") => {
             (
                 "cargo",
                 [
                     "build",
-                    "--manifest-path=implants/Cargo.toml",
+                    implants_manifest_path.as_str(),
                     "--target",
                     "x86_64-unknown-linux-gnu",
                     "--target-dir",
@@ -96,7 +99,7 @@ pub fn generate(
                 "cargo",
                 [
                     "build",
-                    "--manifest-path=implants/Cargo.toml",
+                    implants_manifest_path.as_str(),
                     "--target",
                     "i686-unknown-linux-gnu",
                     "--target-dir",
@@ -111,7 +114,7 @@ pub fn generate(
                 "cargo",
                 [
                     "build",
-                    "--manifest-path=implants/Cargo.toml",
+                    implants_manifest_path.as_str(),
                     "--target",
                     "x86_64-pc-windows-gnu",
                     "--target-dir",
@@ -126,7 +129,7 @@ pub fn generate(
                 "cargo",
                 [
                     "build",
-                    "--manifest-path=implants/Cargo.toml",
+                    implants_manifest_path.as_str(),
                     "--target",
                     "i686-pc-windows-gnu",
                     "--target-dir",
