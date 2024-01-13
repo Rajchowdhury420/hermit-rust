@@ -344,6 +344,24 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         args: Some(dir),
                     });
                 }
+                Some(("cp", subm)) => {
+                    op = Operation::AgentTask("cp".to_string());
+
+                    let src = match subm.get_one::<String>("source") {
+                        Some(s) => s.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    let dest = match subm.get_one::<String>("dest") {
+                        Some(d) => d.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(src + " " + dest.as_str()),
+                    });
+                }
                 Some(("download", subm)) => {
                     op = Operation::AgentTask("download".to_string());
 
@@ -367,6 +385,19 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                 }
                 Some(("ls", subm)) => {
                     op = Operation::AgentTask("ls".to_string());
+
+                    let dir = match subm.get_one::<String>("directory") {
+                        Some(d) => d.to_owned(),
+                        None => "".to_owned(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(dir),
+                    });
+                }
+                Some(("mkdir", subm)) => {
+                    op = Operation::AgentTask("mkdir".to_string());
 
                     let dir = match subm.get_one::<String>("directory") {
                         Some(d) => d.to_owned(),

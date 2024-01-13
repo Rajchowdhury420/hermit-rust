@@ -36,10 +36,12 @@ Specifically, you can use the following commands:
 |exit|Exit the agent mode.|
 |cat|Read a file content.|
 |cd|Change the current directory.|
+|cp|Copy file to another location.|
 |download|Download a file from target computer.|
 |info|Get the detailed information of the system.|
 |ls|List files in specified directory.|
 |loot|Show the looted information for the agent that you've obtained so far. (Under development)|
+|mkdir|Create a new directory.|
 |net|Get the network information.|
 |ps|Process management.|
 |pwd|Get the current directory.|

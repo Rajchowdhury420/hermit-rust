@@ -1,6 +1,8 @@
+use chrono::NaiveDate;
 use log::info;
-use serde::{Deserialize, Serialize};
-use chrono::{NaiveDate, Utc};
+
+use crate::utils::str::truncated_format;
+
 
 #[derive(Clone, Debug)]
 pub struct Agent {
@@ -46,7 +48,6 @@ pub fn format_agent_details(agent: Agent) -> String {
     info!("Getting the agent details...");
 
     let mut output = String::new();
-    // output = output + "+" + "-".repeat(64).as_str() + "\n";
     output = output + "\n";
     output = output + format!("{:<15} : {:<20}\n", "ID", agent.id).as_str();
     output = output + format!("{:<15} : {:<20}\n", "NAME", agent.name).as_str();
@@ -77,10 +78,10 @@ pub fn format_all_agents(agents: &Vec<Agent>) -> String  {
         output = output + format!(
             "{:>3} | {:<18} | {:<15} | {:<15} | {:<25} | {:<15}\n",
             agent.id.to_owned(),
-            agent.name.to_owned(),
-            agent.hostname.to_owned(),
+            truncated_format(agent.name.to_owned(), 15),
+            truncated_format(agent.hostname.to_owned(), 12),
             format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned()),
-            agent.listener_url.to_owned(),
+            truncated_format(agent.listener_url.to_owned(), 22),
             agent.last_commit.to_string(),
         ).as_str();
     }

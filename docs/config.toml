@@ -13,7 +13,7 @@ output_dir = "public"
 # Whether to automatically compile all Sass files in the sass directory
 compile_sass = true
 
-minify_html = true
+# minify_html = true <- It's bug on Vercel that the newlines are removed from code blocks when the `minify_html` is set to `true`.
 
 ignored_content = []
 ignored_static = []

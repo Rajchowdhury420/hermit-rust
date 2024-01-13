@@ -1,3 +1,8 @@
+use config::config::Config;
+use crypto::aesgcm::{
+    AES_GCM_KEY_LENGTH,
+    decode, derive_shared_secret, generate_keypair, vec_u8_to_u8_32
+};
 use x25519_dalek::PublicKey;
 
 pub mod core;
@@ -9,12 +14,6 @@ pub mod utils;
 use core::run_linux::run;
 #[cfg(target_os = "windows")]
 use core::run_windows::run;
-
-use config::config::Config;
-use crypto::aesgcm::{
-    AES_GCM_KEY_LENGTH,
-    decode, derive_shared_secret, generate_keypair, vec_u8_to_u8_32
-};
 
 include!(concat!(env!("OUT_DIR"), "/init.rs"));
 

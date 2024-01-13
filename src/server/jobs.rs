@@ -11,6 +11,8 @@ use super::listeners::{
     listener::Listener,
 };
 
+use crate::utils::str::truncated_format;
+
 #[derive(Clone, Debug)]
 pub enum JobMessage {
     Start(u32),
@@ -144,20 +146,24 @@ pub fn format_all_listeners(jobs: &Vec<Job>) -> String  {
     let mut output = String::new();
     output = output + "\n";
     output = output + format!(
-        "{:>5} | {:<20} | {:<20} | {:<32} | {:15}\n",
+        "{:>5} | {:<20} | {:<20} | {:<28} | {:8}\n",
         "ID", "NAME", "HOSTS", "URL", "STATUS",
     ).as_str();
     output = output + "-".repeat(100).as_str() + "\n";
 
     for job in jobs {
-        output = output + format!("{:>5} | {:<20} | {:<20} | {:<32} | {:15}\n",
+        output = output + format!("{:>5} | {:<20} | {:<20} | {:<28} | {:8}\n",
             job.id.to_string(),
-            job.listener.name.to_string(),
-            job.listener.hostnames.to_owned().join(","),
-            format!("{}://{}:{}/",
-                job.listener.protocol.to_string(),
-                job.listener.host.to_string(),
-                job.listener.port.to_string()),
+            truncated_format(job.listener.name.to_string(), 17),
+            truncated_format(job.listener.hostnames.to_owned().join(","), 17),
+            truncated_format(
+                format!("{}://{}:{}/",
+                    job.listener.protocol.to_string(),
+                    job.listener.host.to_string(),
+                    job.listener.port.to_string()
+                ),
+                25
+            ),
             if job.running == true { "active".to_string().green() } else { "inactive".to_string().red() },
         ).as_str();
     }
