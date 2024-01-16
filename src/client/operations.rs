@@ -8,10 +8,13 @@ use super::{
         implant::ImplantOption,
         listener::ListenerOption,
         options::Options,
-        task::TaskOption,
+        task::TaskOption, operator::OperatorOption,
     },
 };
-use crate::utils::random::random_name;
+use crate::{
+    server::listeners::https::generate_user_agent,
+    utils::random::random_name,
+};
 
 #[derive(Debug)]
 pub enum Operation {
@@ -21,6 +24,11 @@ pub enum Operation {
     Error(String),
     Exit,
     Unknown,
+    // Operators
+    // AddOperator,
+    // DeleteOperator,
+    InfoOperator,
+    ListOperators,
     // Listeners
     AddListener,
     DeleteListener,
@@ -55,6 +63,53 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
     match &client.mode {
         Mode::Root => {
             match matches.subcommand() {
+                // Operator
+                Some(("operator", subm)) => {
+                    match subm.subcommand() {
+                        // Some(("add", subm2)) => {
+                        //     op = Operation::AddOperator;
+                        //     let name = match subm2.get_one::<String>("name") {
+                        //         Some(n) => Some(n.to_owned()),
+                        //         None => Some(random_name("operator".to_owned())),
+                        //     };
+
+                        //     let operator_option = OperatorOption {
+                        //         name,
+                        //     };
+                        //     options.operator_opt = Some(operator_option);
+                        // }
+                        // Some(("delete", subm2)) => {
+                        //     op = Operation::DeleteOperator;
+                        // }
+                        Some(("info", subm2)) => {
+                            op = Operation::InfoOperator;
+                            let target = match subm2.get_one::<String>("operator") {
+                                Some(n) => { Some(n.to_owned()) },
+                                None => { None },
+                            };
+
+                            options.operator_opt = Some(OperatorOption {
+                                name: target,
+                            });
+                        }
+                        Some(("list", _)) => {
+                            op = Operation::ListOperators;
+                        }
+                        _ => {
+                            op = Operation::Unknown;
+                        }
+                    }
+                }
+                Some(("operators", _)) => {
+                    op = Operation::ListOperators;
+                }
+                Some(("whoami", _)) => {
+                    op = Operation::InfoOperator;
+                    
+                    options.operator_opt = Some(OperatorOption {
+                        name: Some(client.operator_name.to_string()),
+                    });
+                }
                 // Listener
                 Some(("listener", subm)) => {
                     match subm.subcommand() {
@@ -70,6 +125,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 }
                                 None => Some(Vec::new()),
                             };
+
                             let listener_option = ListenerOption {
                                 name,
                                 domains,
@@ -203,32 +259,36 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         Some(("gen", subm2)) => {
                             op = Operation::GenerateImplant;
                             let name = match subm2.get_one::<String>("name") {
-                                Some(n) => { n.to_string() },
+                                Some(n) => n.to_string(),
                                 None => { random_name("implant".to_owned()) }
                             };
                             let url = match subm2.get_one::<String>("url") {
-                                Some(n) => { n.to_string() },
+                                Some(n) => n.to_string(),
                                 None => { "http://localhost:4443/".to_owned() }
                             };
                             let os = match subm2.get_one::<String>("os") {
-                                Some(n) => { n.to_string() },
-                                None => { "windows".to_string() }
+                                Some(n) => n.to_string(),
+                                None => "windows".to_string(),
                             };
                             let arch = match subm2.get_one::<String>("arch") {
-                                Some(n) => { n.to_string() },
-                                None => { "amd64".to_string() }
+                                Some(n) => n.to_string(),
+                                None => "amd64".to_string(),
                             };
                             let format = match subm2.get_one::<String>("format") {
-                                Some(n) => { n.to_string() },
-                                None => { "exe".to_string() }
+                                Some(n) => n.to_string(),
+                                None => "exe".to_string(),
                             };
                             let sleep = match subm2.get_one::<u64>("sleep") {
-                                Some(n) => { *n },
-                                None => { 3 }
+                                Some(n) => *n,
+                                None => 3,
                             };
                             let jitter = match subm2.get_one::<u64>("jitter") {
                                 Some(j) => *j,
                                 None => 5,
+                            };
+                            let user_agent = match subm2.get_one::<String>("user-agent") {
+                                Some(u) => u.to_string(),
+                                None => generate_user_agent(os.to_string(), arch.to_string()),
                             };
         
                             options.implant_opt = Some(ImplantOption {
@@ -239,6 +299,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 format: Some(format),
                                 sleep: Some(sleep),
                                 jitter: Some(jitter),
+                                user_agent: Some(user_agent),
                             });
                         }
                         Some(("download", subm2)) => {
@@ -256,6 +317,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 format: None,
                                 sleep: None,
                                 jitter: None,
+                                user_agent: None,
                             });
                         }
                         Some(("delete", subm2)) => {
@@ -273,6 +335,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 format: None,
                                 sleep: None,
                                 jitter: None,
+                                user_agent: None,
                             });
                         }
                         Some(("info", subm2)) => {
@@ -290,6 +353,7 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                                 format: None,
                                 sleep: None,
                                 jitter: None,
+                                user_agent: None,
                             });
                         }
                         Some(("list", _)) => {
@@ -582,6 +646,23 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
                         args: Some(sleeptime.to_string()),
                     });
                 }
+                Some(("upload", subm)) => {
+                    op = Operation::AgentTask("upload".to_string());
+
+                    let uploaded_file = match subm.get_one::<String>("file") {
+                        Some(f) => f.to_string(),
+                        None => "".to_string(),
+                    };
+                    let dest = match subm.get_one::<String>("dest") {
+                        Some(d) => d.to_string(),
+                        None => "".to_string(),
+                    };
+
+                    options.task_opt = Some(TaskOption {
+                        agent_name: Some(agent_name.to_owned()),
+                        args: Some(uploaded_file + " " + dest.as_str()),
+                    });
+                }
                 Some(("whoami", _)) => {
                     op = Operation::AgentTask("whoami".to_string());
                     options.task_opt = Some(TaskOption {
@@ -602,7 +683,6 @@ pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Opti
             }
         }
     }
-
 
     (op, options)
 }

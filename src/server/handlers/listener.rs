@@ -4,7 +4,6 @@ use tokio::sync::{Mutex, MutexGuard};
 use url::Url;
 
 use crate::server::{
-    db,
     jobs::{find_job, format_all_listeners, format_listener_details, JobMessage},
     server::Server,
 };
@@ -145,7 +144,6 @@ pub async fn handle_listener(
             let output = format_listener_details(job);
             let _ = socket_lock.send(Message::Text(output)).await;
             let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
-            
         }
         "list" => {
             let mut jobs = server_lock.jobs.lock().await;

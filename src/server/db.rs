@@ -43,3 +43,14 @@ pub use listeners::{
     exists_listener,
     get_all_listeners
 };
+
+mod operators;
+pub use operators::{
+    init_operators,
+    add_operator,
+    delete_operator,
+    delete_all_operators,
+    exists_operator,
+    get_operator,
+    get_all_operators,
+};

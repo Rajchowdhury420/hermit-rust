@@ -25,6 +25,7 @@ pub fn generate(
     format: String,
     sleep: u64,
     jitter: u64,
+    user_agent: String,
 ) -> Result<(String, Vec<u8>), Error> {
 
     info!("Generating an implant...");
@@ -33,9 +34,6 @@ pub fn generate(
     let proto = parsed_url.scheme();
     let host = parsed_url.host().unwrap();
     let port = parsed_url.port().unwrap();
-
-    // Additional options
-    let user_agent = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0";
 
     // Use Diffie-Hellman key exchange for secure comminucation
     let server_public_key = match db::get_keypair(db_path.to_string()) {

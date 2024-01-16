@@ -6,6 +6,7 @@ use super::{
     implants::init_implants,
     keypair::init_keypair,
     listeners::init_listeners,
+    operators::init_operators,
 };
 
 pub const DB_PATH: &str = "server/hermit.db";
@@ -29,6 +30,7 @@ pub fn init_db(db_path: String) -> Result<()> {
     init_agents(db_path.to_owned())?;
     init_keypair(db_path.to_owned())?;
     init_implants(db_path.to_owned())?;
+    init_operators(db_path.to_owned())?;
 
     Ok(())
 }

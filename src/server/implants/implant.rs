@@ -12,6 +12,7 @@ pub struct Implant {
     pub format: String,
     pub sleep: u64,
     pub jitter: u64,
+    pub user_agent: String,
 }
 
 impl Implant {
@@ -24,6 +25,7 @@ impl Implant {
         format: String,
         sleep: u64,
         jitter: u64,
+        user_agent: String,
     ) -> Self {
         Self {
             id,
@@ -34,6 +36,7 @@ impl Implant {
             format,
             sleep,
             jitter,
+            user_agent,
         }
     }
 }
@@ -51,6 +54,7 @@ pub fn format_implant_details(implant: Implant) -> String {
     output = output + format!("{:<10} : {:<20}\n", "FORMAT", implant.format).as_str();
     output = output + format!("{:<10} : {:<20}\n", "SLEEP", implant.sleep).as_str();
     output = output + format!("{:<10} : {:<20}\n", "JITTER", implant.jitter).as_str();
+    output = output + format!("{:<10} : {:<20}\n", "USER AGENT", implant.user_agent).as_str();
     output
 }
 
@@ -66,7 +70,8 @@ pub fn format_all_implants(implants: &Vec<Implant>) -> String  {
         "{:>5} | {:<20} | {:<26} | {:<18} | {:<6} | {:>5}\n",
         "ID", "NAME", "LISTENER", "OS", "FORMAT", "SLEEP",
     ).as_str();
-    output = output + "-".repeat(108).as_str() + "\n";
+    let output_len = output.len();
+    output = output + "-".repeat(output_len).as_str() + "\n";
 
     for implant in implants {
         output = output + format!(

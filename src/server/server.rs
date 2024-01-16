@@ -27,6 +27,7 @@ use super::{
         agent::handle_agent,
         implant::handle_implant,
         listener::handle_listener,
+        operator::handle_operator,
         task::handle_task,
     },
 };
@@ -39,6 +40,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Server {
     pub config: Config,
+    pub port: u16,
     pub db: db::DB,
     pub jobs: Arc<Mutex<Vec<Job>>>,  // Jobs contain listeners
     pub tx_job: Arc<Mutex<broadcast::Sender<JobMessage>>>,
@@ -47,11 +49,13 @@ pub struct Server {
 impl Server {
     pub fn new(
         config: Config,
+        port: u16,
         db: db::DB,
         tx_job: broadcast::Sender<JobMessage>,
     ) -> Self {
         Self {
             config,
+            port,
             db,
             jobs: Arc::new(Mutex::new(Vec::new())),
             tx_job: Arc::new(Mutex::new(tx_job)),
@@ -159,13 +163,13 @@ impl Server {
     }
 }
 
-pub async fn run(config: Config) {
+pub async fn run(config: Config, port: u16) {
     // Initialize database
     let db = db::DB::new();
     let db_path = db.path.to_string();
 
     let (tx_job, _rx_job) = broadcast::channel(100);
-    let server = Arc::new(Mutex::new(Server::new(config, db, tx_job)));
+    let server = Arc::new(Mutex::new(Server::new(config, port.to_owned(), db, tx_job)));
 
     // Load data from database or initialize
     if exists_file("server/hermit.db".to_string()) {
@@ -222,7 +226,7 @@ pub async fn run(config: Config) {
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         );
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9999")
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .unwrap();
     info!("listening on {}", listener.local_addr().unwrap());
@@ -254,7 +258,7 @@ async fn ws_handler(
 
 async fn handle_socket(
     socket: WebSocket,
-    who: SocketAddr,
+    operator_addr: SocketAddr,
     server: Arc<Mutex<Server>>
 )  {
     let socket_arc = Arc::new(Mutex::new(socket));
@@ -265,9 +269,23 @@ async fn handle_socket(
 
         if let Some(msg) = socket_lock.recv().await {
             if let Ok(msg) = msg {
-                handle_message(msg, socket_lock, Arc::clone(&server)).await;
+                handle_message(msg, socket_lock, operator_addr, Arc::clone(&server)).await;
             } else {
-                info!("Client {who} abruptly disconnected.");
+                info!("Client {operator_addr} abruptly disconnected.");
+
+                // Delete operator from database
+                match db::delete_operator(
+                    server.lock().await.db.path.to_string(),
+                    operator_addr.to_string(),
+                ) {
+                    Ok(_) => {
+                        info!("Operator deleted from database.");
+                    }
+                    Err(e) => {
+                        error!("Operator could not be deleted from database: {:?}", e);
+                    }
+                }
+
                 return;
             }
         }
@@ -277,6 +295,7 @@ async fn handle_socket(
 async fn handle_message(
     msg: Message,
     mut socket_lock: MutexGuard<'_, WebSocket>,
+    operator_addr: SocketAddr,
     server: Arc<Mutex<Server>>
 ) {
     match msg {
@@ -291,6 +310,14 @@ async fn handle_message(
             };
 
             match args[0].as_str() {
+                "operator" => {
+                    handle_operator(
+                        args,
+                        &mut socket_lock,
+                        operator_addr,
+                        Arc::clone(&server),
+                    ).await;
+                }
                 "listener" => {
                     handle_listener(
                         args,

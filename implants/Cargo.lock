@@ -754,6 +754,7 @@ dependencies = [
  "shellwords",
  "sysinfo",
  "tokio",
+ "url",
  "whoami",
  "windows 0.52.0",
  "x25519-dalek",

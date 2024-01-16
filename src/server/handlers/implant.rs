@@ -30,6 +30,7 @@ pub async fn handle_implant(
             let i_format = args[6].to_owned();
             let i_sleep: u64 = args[7].to_owned().parse().unwrap();
             let i_jitter: u64 = args[8].to_owned().parse().unwrap();
+            let i_user_agent = args[9].to_owned();
 
             let implant = Implant::new(
                 0, // Temporary ID
@@ -40,6 +41,7 @@ pub async fn handle_implant(
                 i_format.to_owned(),
                 i_sleep.to_owned(),
                 i_jitter.to_owned(),
+                i_user_agent.to_owned(),
             );
 
             // Check duplicate
@@ -66,6 +68,7 @@ pub async fn handle_implant(
                 i_format.to_owned(),
                 i_sleep,
                 i_jitter,
+                i_user_agent.to_owned(),
             ) {
                 Ok((output, mut buffer)) => {
                     let _ = send_implant_chunks(
@@ -127,6 +130,7 @@ pub async fn handle_implant(
                     imp.format,
                     imp.sleep,
                     imp.jitter,
+                    imp.user_agent,
                 ) {
                     Ok((output, mut buffer)) => {
                         let _ = send_implant_chunks(

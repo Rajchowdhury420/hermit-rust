@@ -119,7 +119,6 @@ pub fn format_listener_details(job: &mut Job) -> String {
 
     let mut output = String::new();
     output = output + "\n";
-    // output = output + "+" + "-".repeat(64).as_str() + "\n";
     output = output + format!("{:<15} : {:<20}\n", "ID", job.id).as_str();
     output = output + format!("{:<15} : {:<20}\n", "NAME", job.listener.name).as_str();
     output = output + format!("{:<15} : {:<20}\n",
@@ -149,7 +148,8 @@ pub fn format_all_listeners(jobs: &Vec<Job>) -> String  {
         "{:>5} | {:<20} | {:<20} | {:<28} | {:8}\n",
         "ID", "NAME", "HOSTS", "URL", "STATUS",
     ).as_str();
-    output = output + "-".repeat(100).as_str() + "\n";
+    let output_len = output.len();
+    output = output + "-".repeat(output_len).as_str() + "\n";
 
     for job in jobs {
         output = output + format!("{:>5} | {:<20} | {:<20} | {:<28} | {:8}\n",

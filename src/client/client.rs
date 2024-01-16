@@ -46,14 +46,17 @@ pub struct Client {
     pub server_host: String,
     pub server_port: u16,
 
+    pub operator_name: String,
+
     pub mode: Mode,
 }
 
 impl Client {
-    pub fn new(server_host: String, server_port: u16) -> Self {
+    pub fn new(server_host: String, server_port: u16, operator_name: String) -> Self {
         Self {
             server_host,
             server_port,
+            operator_name,
             mode: Mode::Root,
         }
     }
@@ -96,7 +99,12 @@ impl Client {
             "{} Connected to C2 server ({}) successfully.",
             "[+]".green(), server_url.to_string());
     
-        let (mut sender, receiver) = ws_stream.split();
+        let (mut sender, mut receiver) = ws_stream.split();
+
+        // Register the operator
+        sender.send(
+            Message::Text(format!("operator add {}", self.operator_name))
+        ).await.expect("Could not register the operator.");
     
         // Client commands
         let mut rl = DefaultEditor::new()?;
@@ -138,6 +146,24 @@ impl Client {
                     if let Some(commands) = commands {
                         match &commands.op {
                             // Root operations
+                            // Operator
+                            Operation::InfoOperator => {
+                                if let Some(operator_opt) = commands.options.operator_opt {
+                                    if let Some(name) = operator_opt.name {
+                                        message = Message::Text(format!("operator info {}", name));
+                                        send_flag = "[operator:info] Getting the operator information...".to_string();
+                                    } else {
+                                        println!("Specify an operator by ID or name.");
+                                        continue;
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            }
+                            Operation::ListOperators => {
+                                message = Message::Text("operator list".to_string());
+                                send_flag = "[operator:list] Getting operators list...".to_string()
+                            }
                             // Listener
                             Operation::AddListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
@@ -245,10 +271,11 @@ impl Client {
                                     let format = implant_opt.format.unwrap();
                                     let sleep = implant_opt.sleep.unwrap();
                                     let jitter = implant_opt.jitter.unwrap();
+                                    let user_agent = implant_opt.user_agent.unwrap();
 
                                     message = Message::Text(
-                                        format!("implant gen {} {} {} {} {} {} {}",
-                                            name, url, os, arch, format, sleep, jitter));
+                                        format!("implant gen {} {} {} {} {} {} {} '{}'",
+                                            name, url, os, arch, format, sleep, jitter, user_agent));
                                     send_flag = "[implant:gen] Generating the implant...".to_string();
                                 } else {
                                     continue;
@@ -354,7 +381,6 @@ impl Client {
             }
 
             // Send command
-            // sender.send(Message::Text(line.to_owned())).await.expect("Can not send.");
             sender.send(message.to_owned()).await.expect("Can not send.");
 
             // Spinner while waiting for responses
@@ -389,6 +415,7 @@ impl Client {
 
                         match args[0].as_str() {
                             "[done]" => break,
+                            "[operator:list:ok]" |
                             "[listener:add:ok]" | "[listener:delete:ok]" |
                             "[listener:start:ok]" | "[listener:stop:ok]" |
                             "[listener:list:ok]" |
@@ -401,6 +428,7 @@ impl Client {
                                 stop_spin(&mut spin);
                                 println!("{} {}", "[!]".yellow(), args[1..].join(" ").to_owned());
                             }
+                            "[operator:info:error]" | "[operator:list:error]" |
                             "[listener:add:error]" | "[listener:delete:error]" |
                             "[listener:start:error]" | "[listener:stop:error]" |
                             "[listener:info:error]" | "[listener:list:error]" |

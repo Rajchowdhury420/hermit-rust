@@ -72,7 +72,8 @@ pub fn format_all_agents(agents: &Vec<Agent>) -> String  {
         "{:>3} | {:<18} | {:<15} | {:<15} | {:<25} | {:<15}\n",
         "ID", "NAME", "HOSTNAME", "OS", "LISTENER", "LAST COMMIT"
     ).as_str();
-    output = output + "-".repeat(106).as_str() + "\n";
+    let output_len = output.len();
+    output = output + "-".repeat(output_len).as_str() + "\n";
 
     for agent in agents {
         output = output + format!(

