@@ -61,7 +61,7 @@ pub fn format_implant_details(implant: Implant) -> String {
 pub fn format_all_implants(implants: &Vec<Implant>) -> String  {
     info!("Getting implants information...");
     if implants.len() == 0 {
-        return String::new();
+        return "Implants are empty".to_string();
     }
 
     let mut output = String::new();

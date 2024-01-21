@@ -139,7 +139,7 @@ pub fn format_listener_details(job: &mut Job) -> String {
 pub fn format_all_listeners(jobs: &Vec<Job>) -> String  {
     info!("Getting listeners status...");
     if jobs.len() == 0 {
-        return String::new();
+        return "Listeners are empty.".to_string();
     }
 
     let mut output = String::new();

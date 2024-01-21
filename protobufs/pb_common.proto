@@ -1,0 +1,10 @@
+syntax = "proto3";
+package pb_common;
+
+message Empty {}
+
+message Result {
+    bool    success = 1;
+    string  message = 2;
+    bytes   data    = 3;
+}

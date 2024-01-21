@@ -10,7 +10,7 @@ pub mod utils;
 
 use crate::{
     banner::banner,
-    client::client::Client,
+    client::client::HermitClient,
     config::Config,
     server::server::run as run_server,
     utils::{fs::mkdir, random::random_name},
@@ -27,12 +27,12 @@ struct Cli {
 enum Commands {
     /// C2 client
     Client {
-        /// Host to connect to C2 server
-        #[arg(short = 'H', long)]
+        /// Host to connect to the C2 server
+        #[arg(short = 'H', long, default_value_t = String::from("[::1]"))]
         host: String,
 
-        /// Port to connect to C2 server
-        #[arg(short = 'P', long)]
+        /// Port to connect to the C2 server
+        #[arg(short = 'P', long, default_value_t = 9999)]
         port: u16,
 
         /// Operator name
@@ -42,7 +42,11 @@ enum Commands {
 
     /// C2 server
     Server {
-        /// Port for C2 server
+        /// Host for the C2 server
+        #[arg(short = 'H', long, default_value_t = String::from("[::1]"))]
+        host: String,
+
+        /// Port for th C2 server
         #[arg(short = 'P', long, default_value_t = 9999)]
         port: u16,
     },
@@ -73,17 +77,17 @@ async fn main() {
             mkdir("client".to_string()).unwrap();
             
             banner("client");
-            let _ = Client::new(
+            let _ = HermitClient::new(
                 host.to_owned(),
                 port.to_owned(),
                 name.to_owned()
             ).run().await;
         },
-        Some(Commands::Server { port }) => {
+        Some(Commands::Server { host, port }) => {
             mkdir("server".to_string()).unwrap();
 
             banner("server");
-            let _ = run_server(config, *port).await;
+            let _ = run_server(config, host.to_string(), *port).await;
         },
         _ => {
             println!("Not enough argument. Run `hermit help` for the usage.")

@@ -12,14 +12,39 @@ If the **Rust** has not been installed on your system, install it first.
 
 <br />
 
-## For C2 Server
+## Install Proto Buffers Compiler
+
+It's required for serving gRPC with [Tonic](https://github.com/hyperium/tonic) for the C2 server.  
+
+**Debian/Ubuntu:**
+
+```sh
+sudo apt install protobuf-compiler libprotobuf-dev
+```
+
+**Alpine Linux:**
+
+```sh
+sudo apk add protoc protobuf-dev
+```
+
+**Windows:**
+
+1. Download from the [release](https://github.com/protocolbuffers/protobuf/releases/latest) page.  
+2. Extract the file bin\protoc.exe and put it somewhere in the PATH.
+3. Check if the command is available with executing `protoc --version`.
+
+
+<br />
+
+## For C2 Server Only
 
 C2 server can work on **Linux** and **Windows** (**macOS** is not tested).  
 However, it's recommended to use it on **Linux** for stable operations.
 
 ### Packages
 
-- **Debian/Ubuntu**
+**Debian/Ubuntu:**
 
 Install the required packages.  
 
@@ -36,14 +61,14 @@ sudo apt install -y git build-essential mingw-w64 libxcb-xfixes0-dev
 
 For cross-compilation implants, we need to add the following targets for each agent.
 
-- **Linux target**
+- **Linux target:**
 
 ```sh
 rustup target add x86_64-unknown-linux-gnu
 rustup target add i686-unknown-linux-gnu
 ```
 
-- **Windows target**
+- **Windows target:**
 
 ```sh
 rustup target add x86_64-pc-windows-gnu
@@ -52,7 +77,7 @@ rustup target add i686-pc-windows-gnu
 
 <br />
 
-## For C2 Client
+## For C2 Client Only
 
 Similar to the C2 server, the C2 client also works on **Linux** and **Windows** but recommended to use it on **Linux** for stable operations.  
 

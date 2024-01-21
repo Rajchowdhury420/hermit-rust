@@ -1,44 +1,24 @@
-use axum::{
-    Extension,
-    extract::connect_info::ConnectInfo,
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
-use axum_extra::TypedHeader;
 use log::{error, info};
 use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex, MutexGuard};
-use tower_http::{
-    add_extension::AddExtensionLayer,
-    trace::{DefaultMakeSpan, TraceLayer},
-};
+use tokio::sync::{broadcast, Mutex};
 
 use super::{
     certs::https::{create_server_certs, create_root_ca},
     crypto::aesgcm,
-    db,
+    db::{self, DB_PATH},
+    grpc,
     listeners::listener::Listener,
     jobs::{find_job, Job, JobMessage},
-    handlers::{
-        agent::handle_agent,
-        implant::handle_implant,
-        listener::handle_listener,
-        operator::handle_operator,
-        task::handle_task,
-    },
 };
 use crate::{
     config::Config,
-    server::db::DB_PATH,
     utils::fs::{mkdir, mkfile, exists_file},
 };
 
 #[derive(Debug)]
-pub struct Server {
+pub struct HermitServer {
     pub config: Config,
     pub port: u16,
     pub db: db::DB,
@@ -46,7 +26,7 @@ pub struct Server {
     pub tx_job: Arc<Mutex<broadcast::Sender<JobMessage>>>,
 }
 
-impl Server {
+impl HermitServer {
     pub fn new(
         config: Config,
         port: u16,
@@ -163,18 +143,18 @@ impl Server {
     }
 }
 
-pub async fn run(config: Config, port: u16) {
+pub async fn run(config: Config, host: String, port: u16) {
     // Initialize database
     let db = db::DB::new();
-    let db_path = db.path.to_string();
+    let db_path_abs = db.path.to_string(); // This is an absolute path
 
     let (tx_job, _rx_job) = broadcast::channel(100);
-    let server = Arc::new(Mutex::new(Server::new(config, port.to_owned(), db, tx_job)));
+    let server = Arc::new(Mutex::new(HermitServer::new(config, port.to_owned(), db, tx_job)));
 
     // Load data from database or initialize
-    if exists_file("server/hermit.db".to_string()) {
+    if exists_file(DB_PATH.to_string()) {
         // Load all listeners
-        let all_listeners = db::get_all_listeners(db_path.to_string()).unwrap();
+        let all_listeners = db::get_all_listeners(db_path_abs.to_string()).unwrap();
         if all_listeners.len() > 0 {
             let mut server_lock = server.lock().await;
             for listener in all_listeners {
@@ -190,7 +170,7 @@ pub async fn run(config: Config, port: u16) {
         }
     } else {
         mkfile(DB_PATH.to_string()).unwrap();
-        db::init_db(db_path.to_string()).unwrap();
+        db::init_db(db_path_abs.to_string()).unwrap();
     }
 
     // Generate the root certificates if they don't exist yet.
@@ -200,8 +180,8 @@ pub async fn run(config: Config, port: u16) {
         let _ = create_root_ca();
     }
 
-    // Generate kaypair (for secure communication with agents) if it does not exist yet in database
-    let keypair_exists = match db::exists_keypair(db_path.to_string()) {
+    // Generate kaypair for listeners (for secure communication with agents) if it does not exist yet in database
+    let keypair_exists = match db::exists_keypair(db_path_abs.to_string()) {
         Ok(exists) => exists,
         Err(e) => {
             error!("Error: {}", e.to_string());
@@ -213,150 +193,16 @@ pub async fn run(config: Config, port: u16) {
         let encoded_secret = aesgcm::encode(secret.as_bytes());
         let encoded_public = aesgcm::encode(public.as_bytes());
 
-        let _ = db::add_keypair(db_path.to_string(), encoded_secret, encoded_public);
+        let _ = db::add_keypair(db_path_abs.to_string(), encoded_secret, encoded_public);
     }
 
-    let app = Router::new()
-        .route("/hermit", get(ws_handler))
-        .layer(
-            AddExtensionLayer::new(server),
-        )
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
-        );
-
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+    // Start gRPC server
+    let addr: SocketAddr = format!("{host}:{port}").parse().unwrap();
+    info!("Start gRPC server on http://{}:{}", addr.ip(), addr.port());
+    let hermitrpc_service = grpc::HermitRpcService::new(server);
+    tonic::transport::Server::builder()
+        .add_service(grpc::pb_hermitrpc::hermit_rpc_server::HermitRpcServer::new(hermitrpc_service))
+        .serve(addr)
         .await
         .unwrap();
-    info!("listening on {}", listener.local_addr().unwrap());
-
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
-}
-
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(server): Extension<Arc<Mutex<Server>>>,
-) -> impl IntoResponse {
-    let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
-        user_agent.to_string()
-    } else {
-        String::from("unknown browser")
-    };
-
-    info!("`{user_agent}` at {addr} connected.");
-
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, server))
-}
-
-async fn handle_socket(
-    socket: WebSocket,
-    operator_addr: SocketAddr,
-    server: Arc<Mutex<Server>>
-)  {
-    let socket_arc = Arc::new(Mutex::new(socket));
-        
-    loop {
-        let socket_clone = Arc::clone(&socket_arc);
-        let mut socket_lock = socket_clone.lock().await;
-
-        if let Some(msg) = socket_lock.recv().await {
-            if let Ok(msg) = msg {
-                handle_message(msg, socket_lock, operator_addr, Arc::clone(&server)).await;
-            } else {
-                info!("Client {operator_addr} abruptly disconnected.");
-
-                // Delete operator from database
-                match db::delete_operator(
-                    server.lock().await.db.path.to_string(),
-                    operator_addr.to_string(),
-                ) {
-                    Ok(_) => {
-                        info!("Operator deleted from database.");
-                    }
-                    Err(e) => {
-                        error!("Operator could not be deleted from database: {:?}", e);
-                    }
-                }
-
-                return;
-            }
-        }
-    }
-}
-
-async fn handle_message(
-    msg: Message,
-    mut socket_lock: MutexGuard<'_, WebSocket>,
-    operator_addr: SocketAddr,
-    server: Arc<Mutex<Server>>
-) {
-    match msg {
-        Message::Text(text) => {
-            let args = match shellwords::split(text.as_str()) {
-                Ok(args) => { args }
-                Err(err) => {
-                    error!("Can't parse command line: {err}");
-                    // vec!["".to_string()]
-                    return;
-                }
-            };
-
-            match args[0].as_str() {
-                "operator" => {
-                    handle_operator(
-                        args,
-                        &mut socket_lock,
-                        operator_addr,
-                        Arc::clone(&server),
-                    ).await;
-                }
-                "listener" => {
-                    handle_listener(
-                        args,
-                        &mut socket_lock,
-                        Arc::clone(&server),
-                    ).await;
-                }
-                "agent" => {
-                    handle_agent(
-                        args,
-                        &mut socket_lock,
-                        Arc::clone(&server),
-                    ).await;
-                }
-                "implant" => {
-                    handle_implant(
-                        text.to_owned(),
-                        args,
-                        &mut socket_lock,
-                        Arc::clone(&server),
-                    ).await;
-                }
-                "task" => {
-                    handle_task(
-                        text.to_owned(),
-                        args,
-                        &mut socket_lock,
-                    ).await;
-                }
-                _ => {
-                    let _ = socket_lock.send(
-                        Message::Text(format!("Unknown command: {text}"))
-                    ).await;
-                    let _ = socket_lock.send(
-                        Message::Text("[done]".to_owned())
-                    ).await;
-                }
-            }
-        }
-        _ => {}
-    }
 }

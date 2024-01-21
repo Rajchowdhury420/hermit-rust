@@ -1,23 +1,48 @@
 use clap::{ArgMatches, Command};
 use colored::Colorize;
-use futures_util::{SinkExt, StreamExt};
 use rustyline::{DefaultEditor, Result};
 use rustyline::error::ReadlineError;
-use spinners::{Spinner, Spinners};
-use std::{
-    process,
-    sync::{Arc, Mutex},
-};
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::protocol::Message,
-};
+use std::process;
 
-use super::options::options::Options;
-use super::operations::{Operation, set_operations};
-use super::cli::cmd::create_cmd;
-use super::prompt::set_prompt;
-use crate::utils::fs::{write_file, get_app_dir};
+use super::{
+    cli::cmd::create_cmd,
+    handlers::{
+        agent::{
+            handle_agent_use,
+            handle_agent_delete,
+            handle_agent_info,
+            handle_agent_list,
+            handle_agent_task,
+        },
+        implant::{
+            handle_implant_generate,
+            handle_implant_download,
+            handle_implant_delete,
+            handle_implant_info,
+            handle_implant_list,
+        },
+        listener::{
+            handle_listener_add,
+            handle_listener_delete,
+            handle_listener_start,
+            handle_listener_stop,
+            handle_listener_info,
+            handle_listener_list,
+        },
+        operator::{
+            handle_operator_add,
+            handle_operator_info,
+            handle_operator_list,
+        }
+    },
+    operations::{Operation, set_operations},
+    options::options::Options,
+    prompt::set_prompt,
+};
+use crate::{
+    server::grpc,
+    utils::fs::{write_file, get_app_dir},
+};
 
 const EXIT_SUCCESS: i32 = 0;
 // const EXIT_FAILURE: i32 = 0;
@@ -39,10 +64,10 @@ impl Commands {
 
 pub enum Mode {
     Root,
-    Agent(String, String),
+    Agent(String, String), // Agent name, Agent OS
 }
 
-pub struct Client {
+pub struct HermitClient {
     pub server_host: String,
     pub server_port: u16,
 
@@ -51,7 +76,7 @@ pub struct Client {
     pub mode: Mode,
 }
 
-impl Client {
+impl HermitClient {
     pub fn new(server_host: String, server_port: u16, operator_name: String) -> Self {
         Self {
             server_host,
@@ -78,47 +103,35 @@ impl Client {
     }
     
     pub async fn run(&mut self) -> Result<()> {
-        // Connect to C2 server.
-        let server_url = format!(
-            "ws://{}:{}/hermit",
-            self.server_host.to_owned(),
-            self.server_port.to_owned());
-    
-        let ws_stream = match connect_async(server_url.to_string()).await {
-            Ok((stream, _response)) => {
-                println!("{} Handshake has been completed.", "[+]".green());
-                stream
-            }
+        // Create a gRPC client and connect to the C2 server.
+        let server_addr: tonic::transport::Uri = format!(
+            "http://{}:{}",
+            self.server_host,
+            self.server_port
+        ).parse().unwrap();
+        let mut client = match grpc::pb_hermitrpc::hermit_rpc_client::HermitRpcClient::connect(server_addr.clone()).await {
+            Ok(c) => c,
             Err(e) => {
-                println!("{} WebSocket handshake failed: {}", "[x]".red(), e.to_string());
+                println!("{} Connection Error: {:?}", "[x]".red(), e);
                 return Ok(());
             }
         };
-    
         println!(
-            "{} Connected to C2 server ({}) successfully.",
-            "[+]".green(), server_url.to_string());
-    
-        let (mut sender, mut receiver) = ws_stream.split();
+            "{} Connected the C2 server ({}://{}:{}) successfully.", "[+]".green(),
+            server_addr.scheme().unwrap(), server_addr.host().unwrap(), server_addr.port().unwrap()
+        );
 
-        // Register the operator
-        sender.send(
-            Message::Text(format!("operator add {}", self.operator_name))
-        ).await.expect("Could not register the operator.");
+        // Add the current operator
+        let _ = handle_operator_add(&mut client, self.operator_name.to_string()).await;
     
-        // Client commands
+        // Read a client command by reading lines.
         let mut rl = DefaultEditor::new()?;
         #[cfg(feature = "with-file-history")]
         if rl.load_history("history.txt").is_err() {
             println!("No previous history.");
         }
     
-        let receiver = Arc::new(Mutex::new(receiver));
-    
         loop {
-            let mut message = Message::Text("".to_owned());
-            let mut send_flag = String::new();
-
             println!(""); // Add newline before the prompt for good appearance.
             let readline = rl.readline(
                 set_prompt(&self.mode).as_str());
@@ -150,8 +163,7 @@ impl Client {
                             Operation::InfoOperator => {
                                 if let Some(operator_opt) = commands.options.operator_opt {
                                     if let Some(name) = operator_opt.name {
-                                        message = Message::Text(format!("operator info {}", name));
-                                        send_flag = "[operator:info] Getting the operator information...".to_string();
+                                        let _ = handle_operator_info(&mut client, name).await;
                                     } else {
                                         println!("Specify an operator by ID or name.");
                                         continue;
@@ -161,19 +173,19 @@ impl Client {
                                 }
                             }
                             Operation::ListOperators => {
-                                message = Message::Text("operator list".to_string());
-                                send_flag = "[operator:list] Getting operators list...".to_string()
+                                let _ = handle_operator_list(&mut client).await;
                             }
                             // Listener
                             Operation::AddListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
-                                    message = Message::Text(format!("listener add {} {} {}://{}:{}/",
+                                    let _ = handle_listener_add(
+                                        &mut client,
                                         listener_opt.name.unwrap(),
                                         listener_opt.domains.unwrap().join(","),
                                         listener_opt.proto.unwrap(),
                                         listener_opt.host.unwrap(),
-                                        listener_opt.port.unwrap()));
-                                    send_flag = "[listener:add] Adding the listener...".to_string();
+                                        listener_opt.port.unwrap(),
+                                    ).await;
                                 } else {
                                     println!("Invalid command. Run `add help` for the usage.");
                                     continue;
@@ -182,10 +194,10 @@ impl Client {
                             Operation::DeleteListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("listener delete {}", name));
-                                        send_flag = "[listener:delete] Deleting the listener...".to_string();
+                                        let _ = handle_listener_delete(&mut client, name).await;
                                     } else {
                                         println!("Specify target listener by ID or name.");
+                                        continue;
                                     }
                                 } else {
                                     continue;
@@ -194,10 +206,10 @@ impl Client {
                             Operation::StartListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("listener start {}", name));
-                                        send_flag = "[listener:start] Starting the listener...".to_string();
+                                        let _ = handle_listener_start(&mut client, name).await;
                                     } else {
                                         println!("Specify target listener by ID or name.");
+                                        continue;
                                     }
                                 } else {
                                     continue;
@@ -206,8 +218,7 @@ impl Client {
                             Operation::StopListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("listener stop {}", name));
-                                        send_flag = "[listener:stop] Stopping the listener...".to_string();
+                                        let _ = handle_listener_stop(&mut client, name).await;
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                         continue;
@@ -219,8 +230,7 @@ impl Client {
                             Operation::InfoListener => {
                                 if let Some(listener_opt) = commands.options.listener_opt {
                                     if let Some(name) = listener_opt.name {
-                                        message = Message::Text(format!("listener info {}", name));
-                                        send_flag = "[listener:info] Getting the listener information...".to_string();
+                                        let _ = handle_listener_info(&mut client, name).await;
                                     } else {
                                         println!("Specify target listener by ID or name.");
                                         continue;
@@ -230,36 +240,43 @@ impl Client {
                                 }
                             }
                             Operation::ListListeners => {
-                                message = Message::Text("listener list".to_string());
-                                send_flag = "[listener:list] Getting the listener list...".to_string()
+                                let _ = handle_listener_list(&mut client).await;
                             }
                             // Agent
                             Operation::UseAgent => {
                                 if let Some(agent_opt) = commands.options.agent_opt {
                                     let ag_name = agent_opt.name;
 
-                                    // Check if the agent exists
-                                    message = Message::Text(format!("agent use {}", ag_name));
-                                    send_flag = "[agent:use] Switching to the agent mode...".to_string();
+                                    match handle_agent_use(&mut client, ag_name.to_string()).await {
+                                        Ok(result) => {
+                                            let res_split: Vec<String> = result
+                                                .split(",")
+                                                .map(|s| s.to_string()).collect();
+                                            let agent_name = res_split[0].to_string();
+                                            let agent_os = res_split[1].to_string();
+                                            self.mode = Mode::Agent(agent_name, agent_os);
+                                            println!("{} The agent found. Switch to the agent mode.", "[+]".green());
+                                        }
+                                        Err(e) => {
+                                            println!("{} Error switching to the agent mode: {:?}", "[x]".red(), e);
+                                        }
+                                    }
                                 }
                             }
                             Operation::DeleteAgent => {
                                 if let Some(agent_opt) = commands.options.agent_opt {
                                     let ag_name = agent_opt.name;
-                                    message = Message::Text(format!("agent delete {}", ag_name));
-                                    send_flag = "[agent:delete] Deleting the agent...".to_string();
+                                    let _ = handle_agent_delete(&mut client, ag_name.to_string()).await;
                                 }
                             }
                             Operation::InfoAgent => {
                                 if let Some(agent_opt) = commands.options.agent_opt {
                                     let ag_name = agent_opt.name;
-                                    message = Message::Text(format!("agent info {}", ag_name));
-                                    send_flag = "[agent:info] Getting the agent information...".to_string();
+                                    let _ = handle_agent_info(&mut client, ag_name.to_string()).await;
                                 }
                             }
                             Operation::ListAgents => {
-                                message = Message::Text("agent list".to_string());
-                                send_flag = "[agent:list] Getting the agent list...".to_string();
+                                let _ = handle_agent_list(&mut client).await;
                             }
                             // Implant
                             Operation::GenerateImplant => {
@@ -273,23 +290,25 @@ impl Client {
                                     let jitter = implant_opt.jitter.unwrap();
                                     let user_agent = implant_opt.user_agent.unwrap();
 
-                                    message = Message::Text(
-                                        format!("implant gen {} {} {} {} {} {} {} '{}'",
-                                            name, url, os, arch, format, sleep, jitter, user_agent));
-                                    send_flag = "[implant:gen] Generating the implant...".to_string();
+                                    let _ = handle_implant_generate(
+                                        &mut client,
+                                        name,
+                                        url,
+                                        os,
+                                        arch,
+                                        format,
+                                        sleep,
+                                        jitter,
+                                        user_agent,
+                                    ).await;
                                 } else {
                                     continue;
                                 }
-
                             }
                             Operation::DownloadImplant => {
                                 if let Some(implant_opt) = commands.options.implant_opt {
                                     let name = implant_opt.name.unwrap();
-
-                                    message = Message::Text(
-                                        format!("implant download {}", name)
-                                    );
-                                    send_flag = "[implant:download] Downloading the implant...".to_string();
+                                    let _ = handle_implant_download(&mut client, name).await;
                                 } else {
                                     continue;
                                 }
@@ -297,26 +316,21 @@ impl Client {
                             Operation::DeleteImplant => {
                                 if let Some(implant_opt) = commands.options.implant_opt {
                                     let name = implant_opt.name.unwrap();
-
-                                    message = Message::Text(
-                                        format!("implant delete {}", name)
-                                    );
-                                    send_flag = "[implant:delete] Deleting the implant...".to_string();
+                                    let _ = handle_implant_delete(&mut client, name).await;
+                                } else {
+                                    continue;
                                 }
                             }
                             Operation::InfoImplant => {
                                 if let Some(implant_opt) = commands.options.implant_opt {
                                     let name = implant_opt.name.unwrap();
-
-                                    message = Message::Text(
-                                        format!("implant info {}", name)
-                                    );
-                                    send_flag = "[implant:info] Getting the information of implant...".to_string();
+                                    let _ = handle_implant_info(&mut client, name).await;
+                                } else {
+                                    continue;
                                 }
                             }
                             Operation::ListImplants => {
-                                message = Message::Text("implant list".to_string());
-                                send_flag = "[implant:list] Getting the implant list...".to_string();
+                                let _ = handle_implant_list(&mut client).await;
                             }
                             // Misc
                             Operation::Empty => {
@@ -344,13 +358,12 @@ impl Client {
                                     None => "".to_string(),
                                 };
 
-                                if t_args == "" {
-                                    message = Message::Text(format!("task {} {}", t_agent, task));
-                                } else {
-                                    message = Message::Text(format!("task {} {} {}", t_agent, task, t_args));
-                                }
-
-                                send_flag = "[task:set] Sending the task and waiting for the result...".to_string();
+                                let _ = handle_agent_task(
+                                    &mut client,
+                                    t_agent.to_string(),
+                                    task.to_string(),
+                                    t_args.to_string()
+                                ).await;
                             }
                             // Misc
                             Operation::AgentEmpty => {
@@ -379,169 +392,11 @@ impl Client {
                     continue;
                 }
             }
-
-            // Send command
-            sender.send(message.to_owned()).await.expect("Can not send.");
-
-            // Spinner while waiting for responses
-            let mut spin: Option<Spinner> = None;
-            match shellwords::split(&send_flag) {
-                Ok(args) => {
-                    spin = Some(Spinner::new(
-                        Spinners::Dots8,
-                        args[1..].join(" ")
-                    ));
-                }
-                Err(_) => {}
-            }
-                    
-            // Receive responses
-            let mut receiver_lock = receiver.lock().unwrap();
-            let mut recv_flag = String::new();
-
-            let mut allbytes: Vec<u8> = Vec::new();
-
-            while let Some(Ok(msg)) = receiver_lock.next().await {
-                match msg {
-                    Message::Text(text) => {
-                        // Parse the text
-                        let args = match shellwords::split(&text) {
-                            Ok(args) => args,
-                            Err(err) => {
-                                eprintln!("Can't parse the received message: {err}");
-                                vec!["".to_string()]
-                            },
-                        };
-
-                        match args[0].as_str() {
-                            "[done]" => break,
-                            "[operator:list:ok]" |
-                            "[listener:add:ok]" | "[listener:delete:ok]" |
-                            "[listener:start:ok]" | "[listener:stop:ok]" |
-                            "[listener:list:ok]" |
-                            "[agent:delete:ok]" |
-                            "[implant:delete:ok]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[+]".green(), args[1..].join(" ").to_owned());
-                            }
-                            "[listener:start:warn]" | "[listener:stop:warn]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[!]".yellow(), args[1..].join(" ").to_owned());
-                            }
-                            "[operator:info:error]" | "[operator:list:error]" |
-                            "[listener:add:error]" | "[listener:delete:error]" |
-                            "[listener:start:error]" | "[listener:stop:error]" |
-                            "[listener:info:error]" | "[listener:list:error]" |
-                            "[agent:use:error]" | "[agent:delete:error]" |
-                            "[agent:info:error]" | "[agent:list:error]" |
-                            "[implant:gen:error]" | "[implant:delete:error]" |
-                            "[implant:info:error]" | "[implant:list:error]" |
-                            "[task:error]" => {
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[x]".red(), args[1..].join(" ").to_owned());
-                            }
-                            "[agent:use:ok]" => {
-                                // Switch to the agent mode
-                                self.mode = Mode::Agent(args[1].to_owned(), args[2].to_owned());
-                                stop_spin(&mut spin);
-                                println!("{} The agent found. Switch to the agent mode.", "[+]".green());
-                            }
-                            "[implant:gen:ok:sending]" | "[implant:gen:ok:complete]" |
-                            "[task:ok]" | "[task:download:ok]" | "[task:screenshot:ok]" => {
-                                // Will receive binary data after that, so don't stop the spinner yet.
-                                recv_flag = args.join(" ");
-                            }
-                            _ => {
-                                stop_spin(&mut spin);
-                                println!("{text}");
-                            },
-                        }
-
-                    }
-                    Message::Binary(bytes) => {
-                        // Parse recv flag
-                        let args = match shellwords::split(&recv_flag) {
-                            Ok(args) => args,
-                            Err(err) => {
-                                eprintln!("Can't parse command line: {err}");
-                                vec!["".to_string()]
-                            },
-                        };
-
-                        match args[0].as_str() {
-                            "[implant:gen:ok:sending]" => {
-                                allbytes.extend(&bytes);
-                            }
-                            "[implant:gen:ok:complete]" => {
-                                allbytes.extend(&bytes);
-
-                                let outfile = args[1].to_string();
-                                write_file(outfile.to_string(), &allbytes).unwrap();
-                                stop_spin(&mut spin);
-                                println!(
-                                    "{} Implant generated at {}",
-                                    "[+]".green(),
-                                    format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
-                                println!(
-                                    "{} Transfer this file to target machine and execute it to interact with our C2 server.",
-                                    "[i]".green());
-                            }
-                            "[task:ok]" => {
-                                // TODO: Fix garbled characters other than English.
-                                let result_string = String::from_utf8_lossy(&bytes).to_string();
-                                stop_spin(&mut spin);
-                                println!("{} {}", "[+]".green(), result_string);
-                            }
-                            "[task:download:ok]" => {
-                                let outfile = args[1].to_string();
-                                write_file(outfile.to_string(), &bytes).unwrap();
-                                stop_spin(&mut spin);
-                                println!(
-                                    "{} File downloaded at {}",
-                                    "[+]".green(),
-                                    format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
-                            }
-                            "[task:screenshot:ok]" => {
-                                let outfile = args[1].to_string();
-                                write_file(outfile.to_string(), &bytes).unwrap();
-                                stop_spin(&mut spin);
-                                println!(
-                                    "{} Screenshot saved at {}",
-                                    "[+]".green(),
-                                    format!("{}/{}", get_app_dir(), outfile.to_string()).cyan());
-                            }
-                            _ => {}
-                        }
-                    }
-                    Message::Close(c) => {
-                        if let Some(cf) = c {
-                            println!(
-                                "Close with code {} and reason `{}`",
-                                cf.code, cf.reason
-                            );
-                        } else {
-                            println!("Somehow got close message without CloseFrame");
-                        }
-                        process::exit(EXIT_SUCCESS);
-                    }
-                    Message::Frame(_) => {
-                        unreachable!("This is never supposed to happen")
-                    }
-                    _ => { break }
-                }
-            }
         }
     
         #[cfg(feature = "with-file-history")]
         rl.save_history("history.txt");
     
         Ok(())
-    }
-}
-
-fn stop_spin(spin: &mut Option<Spinner>) {
-    if let Some(ref mut spin) = spin {
-        spin.stop();
-        println!(""); // Add newline for good appearance.
     }
 }

@@ -5,6 +5,7 @@ use std::process::Command;
 use std::str::from_utf8;
 use url::Url;
 
+use super::implant::Implant;
 use crate::{
     server::{
         certs::https::create_client_certs,

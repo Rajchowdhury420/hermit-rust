@@ -1,0 +1,35 @@
+syntax = "proto3";
+package pb_hermitrpc;
+
+import "pb_agenttasks.proto";
+import "pb_common.proto";
+import "pb_operations.proto";
+
+service HermitRpc {
+    // *OPERATIONS*
+    // Operators
+    rpc AddOperator(pb_operations.NewOperator) returns (pb_common.Result) {}
+    rpc InfoOperator(pb_operations.Target) returns (pb_common.Result) {}
+    rpc ListOperators(pb_common.Empty) returns (pb_common.Result) {}
+    // Listeners
+    rpc AddListener(pb_operations.NewListener) returns (pb_common.Result) {}
+    rpc DeleteListener(pb_operations.Target) returns (pb_common.Result) {}
+    rpc StartListener(pb_operations.Target) returns (pb_common.Result) {}
+    rpc StopListener(pb_operations.Target) returns (pb_common.Result) {}
+    rpc InfoListener(pb_operations.Target) returns (pb_common.Result) {}
+    rpc ListListeners(pb_common.Empty) returns (pb_common.Result) {}
+    // Agents
+    rpc UseAgent(pb_operations.Target) returns (pb_common.Result) {}
+    rpc DeleteAgent(pb_operations.Target) returns (pb_common.Result) {}
+    rpc InfoAgent(pb_operations.Target) returns (pb_common.Result) {}
+    rpc ListAgents(pb_common.Empty) returns (pb_common.Result) {}
+    // Implants
+    rpc GenerateImplant(pb_operations.NewImplant) returns (stream pb_common.Result) {}
+    rpc DownloadImplant(pb_operations.Target) returns (stream pb_common.Result) {}
+    rpc DeleteImplant(pb_operations.Target) returns (pb_common.Result) {}
+    rpc InfoImplant(pb_operations.Target) returns (pb_common.Result) {}
+    rpc ListImplants(pb_common.Empty) returns (pb_common.Result) {}
+
+    // *AGENT TASKS*
+    rpc AgentTask(pb_agenttasks.Task) returns (stream pb_common.Result) {}
+}

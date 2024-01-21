@@ -2,7 +2,7 @@ pub mod agents;
 pub mod certs;
 pub mod crypto;
 pub mod db;
-pub mod handlers;
+pub mod grpc;
 pub mod implants;
 pub mod jobs;
 pub mod listeners;

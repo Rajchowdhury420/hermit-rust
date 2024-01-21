@@ -63,7 +63,7 @@ pub fn format_agent_details(agent: Agent) -> String {
 pub fn format_all_agents(agents: &Vec<Agent>) -> String  {
     info!("Getting agents status...");
     if agents.len() == 0 {
-        return String::new();
+        return "Agents are empty".to_string();
     }
 
     let mut output = String::new();

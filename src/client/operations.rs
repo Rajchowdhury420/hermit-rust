@@ -2,7 +2,7 @@ use base64::prelude::*;
 use clap::ArgMatches;
 
 use super::{
-    client::{Client, Mode},
+    client::{HermitClient, Mode},
     options::{
         agent::AgentOption,
         implant::ImplantOption,
@@ -56,7 +56,7 @@ pub enum Operation {
     AgentTask(String), // The argument is the task name
 }
 
-pub fn set_operations(client: &Client, matches: &ArgMatches) -> (Operation, Options) {
+pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation, Options) {
     let mut op = Operation::Empty;
     let mut options = Options::new();
 

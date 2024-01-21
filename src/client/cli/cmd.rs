@@ -1,9 +1,9 @@
 use clap::{Arg, Command, value_parser, ArgAction};
 
-use crate::Client;
+use crate::HermitClient;
 use crate::client::client::Mode;
 
-pub fn create_cmd(client: &Client) -> Command {
+pub fn create_cmd(client: &HermitClient) -> Command {
     let cmd = Command::new("client")
         .about("Hermit C2 client")
         .allow_external_subcommands(true);

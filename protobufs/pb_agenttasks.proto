@@ -1,0 +1,9 @@
+syntax = "proto3";
+package pb_agenttasks;
+
+// Specified target file.
+message Task {
+    string agent = 1;
+    string task = 2;
+    string args = 3;
+}
