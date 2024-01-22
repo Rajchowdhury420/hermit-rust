@@ -21,7 +21,8 @@ pub fn init_implants(db_path: String) -> Result<()> {
             format          TEXT NOT NULL,
             sleep           INTEGER NOT NULL,
             jitter          INTEGER NOT NULL,
-            useragent       TEXT NOT NULL
+            useragent       TEXT NOT NULL,
+            killdate        TEXT NOT NULL
         )",
         ()
     )?;
@@ -49,9 +50,9 @@ pub fn add_implant(db_path: String, implant: Implant) -> Result<()> {
 
     db.execute(
         "INSERT INTO implants (
-                name, url, os, arch, format, sleep, jitter, useragent
+                name, url, os, arch, format, sleep, jitter, useragent, killdate
             ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
             )",
         (
             implant.name,
@@ -62,6 +63,7 @@ pub fn add_implant(db_path: String, implant: Implant) -> Result<()> {
             implant.sleep,
             implant.jitter,
             implant.user_agent,
+            implant.killdate,
         )
     )?;
 
@@ -78,7 +80,7 @@ pub fn exists_implant(db_path: String, implant: Implant) -> Result<bool> {
 
     let mut stmt = db.prepare(
         "SELECT * FROM implants
-            WHERE url = ?1 AND os = ?2 AND arch = ?3 AND format = ?4 AND sleep = ?5 AND jitter = ?6 AND useragent = ?7"
+            WHERE url = ?1 AND os = ?2 AND arch = ?3 AND format = ?4 AND sleep = ?5 AND jitter = ?6 AND useragent = ?7 AND killdate = ?8"
     )?;
     let exists = stmt.exists(
         [
@@ -89,6 +91,7 @@ pub fn exists_implant(db_path: String, implant: Implant) -> Result<bool> {
             implant.sleep.to_string(),
             implant.jitter.to_string(),
             implant.user_agent,
+            implant.killdate.to_string(),
         ]
     )?;
 
@@ -133,7 +136,7 @@ pub fn get_implant(db_path: String, name: String) -> Result<Implant> {
     };
 
     let mut stmt = db.prepare(
-        "SELECT id, name, url, os, arch, format, sleep, jitter, useragent
+        "SELECT id, name, url, os, arch, format, sleep, jitter, useragent, killdate
             FROM implants WHERE id = ?1 OR name = ?2"
     )?;
     let implant = stmt.query_row([name.to_string(), name.to_string()], |row| {
@@ -147,6 +150,7 @@ pub fn get_implant(db_path: String, name: String) -> Result<Implant> {
             row.get(6)?,
             row.get(7)?,
             row.get(8)?,
+            row.get(9)?,
         ))
     })?;
 
@@ -164,7 +168,7 @@ pub fn get_all_implants(db_path: String) -> Result<Vec<Implant>> {
     };
 
     let mut stmt = db.prepare(
-        "SELECT id, name, url, os, arch, format, sleep, jitter, useragent
+        "SELECT id, name, url, os, arch, format, sleep, jitter, useragent, killdate
             FROM implants"
     )?;
     let implant_iter = stmt.query_map([], |row| {
@@ -178,6 +182,7 @@ pub fn get_all_implants(db_path: String) -> Result<Vec<Implant>> {
             row.get(6)?,
             row.get(7)?,
             row.get(8)?,
+            row.get(9)?,
         ))
     })?;
 

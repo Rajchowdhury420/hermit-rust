@@ -12,7 +12,7 @@ pub fn set_prompt(mode: &Mode) -> String {
             return format!("{} {} ", name.custom_color(color_gray), mark.red());
         }
         Mode::Agent(agent_name, _) => {
-            return format!("{} [agent: {}] {} ", name.custom_color(color_gray), agent_name.cyan(), mark.red());
+            return format!("{} [{}] {} ", name.custom_color(color_gray), agent_name.cyan(), mark.red());
         }
     }
 }

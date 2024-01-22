@@ -1,17 +1,16 @@
 // References:
 //  - https://github.com/hyperium/tonic/blob/master/examples/routeguide-tutorial.md
 
-use log::{error, info, warn};
+use log::{error, info};
 use std::{
     fs,
     io::{Error, ErrorKind},
-    pin::Pin,
     sync::Arc,
     time::Duration,
 };
 use tokio::sync::{mpsc, Mutex};
-use tokio_stream::{wrappers::ReceiverStream, Stream};
-use tonic::{transport::Server, Request, Response, Status};
+use tokio_stream::{wrappers::ReceiverStream};
+use tonic::{Request, Response, Status};
 
 use crate::utils::{
     datetime::get_datetime,
@@ -55,7 +54,7 @@ use pb_agenttasks::Task;
 use pb_common::{Empty, Result as RpcResult};
 use pb_operations::{NewImplant, NewListener, NewOperator, Target};
 use pb_hermitrpc::{
-    hermit_rpc_server::{HermitRpc, HermitRpcServer},
+    hermit_rpc_server::HermitRpc,
 };
 
 #[derive(Debug)]
@@ -333,7 +332,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn list_listeners(&self, request: Request<Empty>) -> Result<Response<RpcResult>, Status> {
-        info!("'list_listeners' requested form {:?}", request.remote_addr().unwrap());
+        info!("'list_listeners' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
         let jobs_lock = server_lock.jobs.lock().await;
@@ -350,13 +349,11 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn use_agent(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
-        println!("Got a request: {:?}", request.get_ref());
+        info!("'use_agent' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
         let target = request.into_inner().id_or_name;
-        let mut agents = db::get_all_agents(server_lock.db.path.to_string()).unwrap();
-
         let agent = match db::get_agent(
             server_lock.db.path.to_string(),
             target.to_string()
@@ -383,7 +380,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn delete_agent(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
-        println!("Got a request: {:?}", request.get_ref());
+        info!("'delete_agent' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
@@ -406,12 +403,12 @@ impl HermitRpc for HermitRpcService {
                 }
             }
         } else {
-            // Delete an agent
-            let agent = match db::get_agent(
+            // Check if the agent exists in database.
+            match db::get_agent(
                 server_lock.db.path.to_string(),
                 target.to_string()
             ) {
-                Ok(ag) => ag,
+                Ok(_) => {}
                 Err(_) => {
                     result.success = false;
                     result.message = "Agent not found.".to_string();
@@ -437,7 +434,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn info_agent(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
-        println!("Got a request: {:?}", request.get_ref());
+        info!("'info_agent' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
@@ -470,7 +467,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn list_agents(&self, request: Request<Empty>) -> Result<Response<RpcResult>, Status> {
-        println!("Got a request: {:?}", request.get_ref());
+        info!("'list_agents' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
@@ -492,7 +489,7 @@ impl HermitRpc for HermitRpcService {
         &self,
         request: Request<NewImplant>
     ) -> Result<Response<Self::GenerateImplantStream>, Status> {
-        info!("'generate_implant' requested form {:?}", request.remote_addr().unwrap());
+        info!("'generate_implant' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
@@ -508,6 +505,7 @@ impl HermitRpc for HermitRpcService {
             new_implant.sleep as u64,
             new_implant.jitter as u64,
             new_implant.user_agent.to_string(),
+            new_implant.killdate.to_string(),
         );
 
         // Check duplicate
@@ -531,9 +529,10 @@ impl HermitRpc for HermitRpcService {
             implant.sleep,
             implant.jitter,
             implant.user_agent.to_string(),
+            implant.killdate.to_string(),
         ) {
-            Ok((outfile, mut buffer)) => {
-                let (mut tx, rx) = mpsc::channel(4);
+            Ok((outfile, buffer)) => {
+                let (tx, rx) = mpsc::channel(4);
 
                 tokio::spawn(async move {
                     let chunked_buffer = chunk_buffer(buffer).await;
@@ -567,7 +566,7 @@ impl HermitRpc for HermitRpcService {
 
                 return Ok(Response::new(ReceiverStream::new(rx)));    
             },
-            Err(e) => {
+            Err(_) => {
                 return Err(Status::aborted("Implant cannot be generated."));
             }
         }
@@ -579,13 +578,13 @@ impl HermitRpc for HermitRpcService {
         &self,
         request: Request<Target>
     ) -> Result<Response<Self::DownloadImplantStream>, Status> {
-        info!("'download_implant' requested form {:?}", request.remote_addr().unwrap());
+        info!("'download_implant' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
         let target = request.into_inner().id_or_name;
         // Get the implant
-        let mut implants = db::get_all_implants(server_lock.db.path.to_string()).unwrap();
+        let implants = db::get_all_implants(server_lock.db.path.to_string()).unwrap();
         let mut target_implant: Option<Implant> = None;
         for implant in implants {
             if implant.id.to_string() == target || implant.name == target {
@@ -605,9 +604,10 @@ impl HermitRpc for HermitRpcService {
                 imp.sleep,
                 imp.jitter,
                 imp.user_agent,
+                imp.killdate,
             ) {
-                Ok((outfile, mut buffer)) => {
-                    let (mut tx, rx) = mpsc::channel(4);
+                Ok((outfile, buffer)) => {
+                    let (tx, rx) = mpsc::channel(4);
 
                     tokio::spawn(async move {
                         let chunked_buffer = chunk_buffer(buffer).await;
@@ -623,7 +623,7 @@ impl HermitRpc for HermitRpcService {
 
                     return Ok(Response::new(ReceiverStream::new(rx)));
                 },
-                Err(e) => {
+                Err(_) => {
                     return Err(Status::aborted("Implant cannot be generated."));
                 }
             }
@@ -633,7 +633,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn delete_implant(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
-        info!("'delete_implant' requested form {:?}", request.remote_addr().unwrap());
+        info!("'delete_implant' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
@@ -669,7 +669,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn info_implant(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
-        info!("'info_implant' requested form {:?}", request.remote_addr().unwrap());
+        info!("'info_implant' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
         let target = request.into_inner().id_or_name;
@@ -697,7 +697,7 @@ impl HermitRpc for HermitRpcService {
     }
 
     async fn list_implants(&self, request: Request<Empty>) -> Result<Response<RpcResult>, Status> {
-        info!("'list_implants' requested form {:?}", request.remote_addr().unwrap());
+        info!("'list_implants' requested from {:?}", request.remote_addr().unwrap());
 
         let server_lock = self.server.lock().await;
 
@@ -716,7 +716,7 @@ impl HermitRpc for HermitRpcService {
     type AgentTaskStream = ReceiverStream<Result<RpcResult, Status>>;
 
     async fn agent_task(&self, request: Request<Task>) -> Result<Response<Self::AgentTaskStream>, Status> {
-        info!("'agent_task' requested form {:?}", request.remote_addr().unwrap());
+        info!("'agent_task' requested from {:?}", request.remote_addr().unwrap());
 
         let req_task = request.into_inner();
         let task = req_task.task;
@@ -815,9 +815,6 @@ pub async fn chunk_buffer(buffer: Vec<u8>) -> Vec<Vec<u8>> {
 }
 
 fn set_task(agent_name: String, task: String, args: &Vec<String>) -> Result<(), Error> {
-    println!("task: {}", task);
-    println!("args: {:?}", args);
-
     let cmd = task + " " + args.join(" ").as_str();
 
     match write_file(
@@ -843,16 +840,13 @@ async fn check_task_result(
     let mut cnt: u8 = 0;
 
     loop {
-        info!("Getting task result...");
         tokio::time::sleep(sleeptime).await;
 
         if let Ok(task_result) = read_file(
             format!("agents/{}/task/result", agent_name.to_string()))
         {
             if task_result.len() > 0 {
-                info!("task result found.");
-
-                let (mut tx, rx) = mpsc::channel(4);
+                let (tx, rx) = mpsc::channel(4);
                 
                 if task == "download" {
                     let task_result = task_result.clone();
@@ -930,7 +924,6 @@ async fn check_task_result(
                 empty_file(format!("agents/{}/task/result", agent_name.to_string())).unwrap();
                 return Ok(Response::new(ReceiverStream::new(rx)));
             } else {
-                warn!("task result is empty.");
                 cnt += 1;
                 if cnt > max_check_cnt {
                     return Err(Status::aborted("Task result cannot be retrieved."));

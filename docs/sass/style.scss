@@ -21,9 +21,9 @@ $mq-breakpoints: (
 
 :root {
     // Colors
-    --color-dark: #303032;
-    --color-light: #e9eaed;
-    --color-red: #ea4080;
+    --color-white: #ffffff;
+    --color-yellow: #ffff00;
+    --color-gray: #1d1d0a;
     --color-black: #020200;
 
     // fonts
@@ -39,8 +39,8 @@ html,body {
 }
 
 body {
-    background-color: var(--color-dark);
-    color: var(--color-light);
+    background-color: var(--color-black);
+    color: var(--color-white);
     font-family: var(--font-main);
 }
 
@@ -49,7 +49,7 @@ p {
 }
 
 a {
-    color: var(--color-light);
+    color: var(--color-yellow);
     
     &:hover {
         text-decoration: underline;
@@ -61,12 +61,13 @@ ul {
 
     li {
         margin: 8px 0;
+        line-height: 1.6em;
     }
 }
 
 hr {
     width: 100%;
-    border-bottom: 1px solid var(--color-light);
+    border-bottom: 1px solid var(--color-white);
 }
 
 pre {
@@ -74,7 +75,7 @@ pre {
     max-width: calc(100vw - 60px);
     overflow-x: auto;
     padding: 18px 12px;
-    background-color: var(--color-black)!important;
+    background-color: var(--color-gray)!important;
     
     code {
         line-height: 1.4em;
@@ -90,21 +91,21 @@ pre::-webkit-scrollbar-track {
     background-color: var(--color-black);
 }
 pre::-webkit-scrollbar-thumb {
-    background-color: var(--color-light);
+    background-color: var(--color-yellow);
 }
 
 ul li code, p code {
     padding: 2px 4px;
-    background-color: var(--color-black);
+    background-color: var(--color-gray);
     font-size: 1.2em;
-    color: var(--color-red);
+    color: var(--color-yellow);
 }
 
 table {
     border-collapse: collapse;
 
     th,td {
-        border: 1px solid var(--color-light);
+        border: 1px solid var(--color-white);
         padding: 10px;
     }
 }
@@ -114,7 +115,7 @@ header {
     top: 0;
     z-index: 50;
     width: 100vw;
-    background-color: var(--color-light);
+    background-color: var(--color-yellow);
     padding: 12px 0;
     display: flex;
     align-items: baseline;
@@ -130,7 +131,7 @@ header {
         text-decoration: none;
         font-size: 1.2em;
         font-weight: bold;
-        color: var(--color-dark);
+        color: var(--color-black);
 
         @include mq(sm) {
             font-size: 1.4em;
@@ -162,19 +163,19 @@ header {
             flex-direction: row;
             align-items: center;
             background-color: transparent;
-            color: var(--color-dark);
+            color: var(--color-black);
         }
         
         a {
             margin: 8px 0;
             font-size: 1em;
-            color: var(--color-light);
+            color: var(--color-white);
             text-decoration: none;
             font-weight: bold;
 
             @include mq(sm) {
                 margin: 0 8px;
-                color: var(--color-dark);
+                color: var(--color-black);
             }
         }
     }
@@ -199,7 +200,7 @@ header {
             display: block;
             width: 100%;
             height: 4px;
-            background-color: var(--color-dark);
+            background-color: var(--color-black);
 
             &:nth-child(1) {
                 top: 0;
@@ -247,7 +248,7 @@ header {
     align-items: center;
 
     @include mq(sm) {
-        margin: 72px auto;
+        margin-top: 180px;
         width: 60%;
     }
 
@@ -260,6 +261,11 @@ header {
         flex-direction: column;
         align-items: center;
 
+        .icon {
+            width: 80px;
+            filter: brightness(10);
+        }
+
         h1 {
             margin: 12px 0;
             font-size: 2em;
@@ -270,15 +276,6 @@ header {
             font-size: 1.2em;
             text-align: center;
             line-height: 1.6em;
-        }
-
-        img {
-            margin-top: 24px;
-            width: 60%;
-
-            @include mq(sm) {
-                width: 50%;
-            }
         }
     }
 
@@ -296,17 +293,17 @@ header {
         a {
             margin: 12px 0;
             width: 100%;
-            background-color: var(--color-light);
+            background-color: var(--color-white);
             border-radius: 36px;
             padding: 10px 14px;
             text-align: center;
-            color: var(--color-dark);
+            color: var(--color-black);
             font-weight: bold;
             font-size: 1.2em;
             text-decoration: none;
 
             &:hover {
-                filter: brightness(1.1);
+                background-color: var(--color-yellow);
             }
 
             @include mq(sm) {
@@ -314,6 +311,10 @@ header {
                 width: initial;
             }
         }
+    }
+
+    .misc {
+        margin-top: 32px;
     }
 }
 

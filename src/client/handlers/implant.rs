@@ -24,6 +24,7 @@ pub async fn handle_implant_generate(
     sleep: u64,
     jitter: u64,
     user_agent: String,
+    killdate: String,
 ) -> Result<(), Error> {
 
     let mut spin = Spinner::new(
@@ -40,11 +41,13 @@ pub async fn handle_implant_generate(
         sleep: sleep as i64,
         jitter: jitter as i64,
         user_agent: user_agent.to_string(),
+        killdate: killdate.to_string(),
     });
     let response = match client.generate_implant(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Implant cannot be generated: {:?}", "[x]".red(), e);
+            spin.stop();
+            println!("\n{} {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -99,7 +102,8 @@ pub async fn handle_implant_download(
     let response = match client.download_implant(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Implant cannot be downloaded: {:?}", "[x]".red(), e);
+            spin.stop();
+            println!("\n{} {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -149,7 +153,7 @@ pub async fn handle_implant_delete(
     let response = match client.delete_implant(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Implant cannot be deleted: {:?}", "[x]".red(), e);
+            println!("\n{} Implant cannot be deleted: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -168,7 +172,7 @@ pub async fn handle_implant_info(
     let response = match client.info_implant(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Implant info not found: {:?}", "[x]".red(), e);
+            println!("\n{} Implant info not found: {:?}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -184,7 +188,7 @@ pub async fn handle_implant_list(
     let response = match client.list_implants(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Implant info not found: {:?}", "[x]".red(), e);
+            println!("\n{} Implant info not found: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };

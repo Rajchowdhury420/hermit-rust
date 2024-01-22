@@ -39,9 +39,9 @@ use super::{
     options::options::Options,
     prompt::set_prompt,
 };
-use crate::{
-    server::grpc,
-    utils::fs::{write_file, get_app_dir},
+use crate::server::grpc::{
+    self,
+    pb_hermitrpc::hermit_rpc_client::HermitRpcClient,
 };
 
 const EXIT_SUCCESS: i32 = 0;
@@ -55,10 +55,7 @@ struct Commands {
 
 impl Commands {
     fn new(op: Operation, options: Options) -> Self {
-        Self {
-            op,
-            options,
-        }
+        Self { op, options }
     }
 }
 
@@ -70,9 +67,7 @@ pub enum Mode {
 pub struct HermitClient {
     pub server_host: String,
     pub server_port: u16,
-
     pub operator_name: String,
-
     pub mode: Mode,
 }
 
@@ -103,13 +98,12 @@ impl HermitClient {
     }
     
     pub async fn run(&mut self) -> Result<()> {
-        // Create a gRPC client and connect to the C2 server.
         let server_addr: tonic::transport::Uri = format!(
             "http://{}:{}",
             self.server_host,
             self.server_port
         ).parse().unwrap();
-        let mut client = match grpc::pb_hermitrpc::hermit_rpc_client::HermitRpcClient::connect(server_addr.clone()).await {
+        let mut client = match HermitRpcClient::connect(server_addr.clone()).await {
             Ok(c) => c,
             Err(e) => {
                 println!("{} Connection Error: {:?}", "[x]".red(), e);
@@ -132,7 +126,7 @@ impl HermitClient {
         }
     
         loop {
-            println!(""); // Add newline before the prompt for good appearance.
+            println!(""); // Add newline above the prompt for good appearance.
             let readline = rl.readline(
                 set_prompt(&self.mode).as_str());
             match readline {
@@ -289,6 +283,7 @@ impl HermitClient {
                                     let sleep = implant_opt.sleep.unwrap();
                                     let jitter = implant_opt.jitter.unwrap();
                                     let user_agent = implant_opt.user_agent.unwrap();
+                                    let killdate = implant_opt.killdate.unwrap();
 
                                     let _ = handle_implant_generate(
                                         &mut client,
@@ -300,6 +295,7 @@ impl HermitClient {
                                         sleep,
                                         jitter,
                                         user_agent,
+                                        killdate,
                                     ).await;
                                 } else {
                                     continue;

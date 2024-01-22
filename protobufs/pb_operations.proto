@@ -23,6 +23,7 @@ message NewImplant {
     int64 sleep = 6;
     int64 jitter = 7;
     string user_agent = 8;
+    string killdate = 9;
 }
 
 message NewOperator {

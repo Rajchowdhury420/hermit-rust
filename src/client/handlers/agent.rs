@@ -25,7 +25,7 @@ pub async fn handle_agent_use(
     let response = match client.use_agent(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Cannot switch the agent mode: {:?}", "[x]".red(), e);
+            println!("\n{} Cannot switch the agent mode: {}", "[x]".red(), e.message());
             return Err(Error::new(ErrorKind::Other, e.to_string()));
         }
     };
@@ -35,7 +35,8 @@ pub async fn handle_agent_use(
     if result.success {
         return Ok(result.message); // Return the agent name.
     } else {
-        return Err(Error::new(ErrorKind::Other, "Cannot switch the agent mode."));
+        println!("\n{} Cannot switch to the agent mode.", "[x]".red());
+        return Err(Error::new(ErrorKind::Other, "Cannot switch to the agent mode."));
     }
 }
 
@@ -50,7 +51,7 @@ pub async fn handle_agent_delete(
     let response = match client.delete_agent(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} The agent cannot be deleted: {:?}", "[x]".red(), e);
+            println!("\n{} The agent cannot be deleted: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -70,7 +71,7 @@ pub async fn handle_agent_info(
     let response = match client.info_agent(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Cannot display the agent info: {:?}", "[x]".red(), e);
+            println!("\n{} Cannot display the agent info: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -87,7 +88,7 @@ pub async fn handle_agent_list(
     let response = match client.list_agents(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Cannot list agents: {:?}", "[x]".red(), e);
+            println!("\n{} Cannot list agents: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -117,8 +118,7 @@ pub async fn handle_agent_task(
         Ok(r) => r,
         Err(e) => {
             spin.stop();
-            println!("");
-            println!("{} {:?}", "[x]".red(), e.message().to_string());
+            println!("\n{} {}", "[x]".red(), e.message());
             return Ok(());
         }
     };

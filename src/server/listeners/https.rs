@@ -171,7 +171,6 @@ pub async fn start_https_listener(
 }
 
 async fn hello() -> &'static str {
-    info!("Agent requested `/`");
     "Hello world!"
 }
 
@@ -179,9 +178,6 @@ async fn register(
     State(db_path): State<String>,
     Json(payload): Json<RegisterAgentData>,
 ) -> (StatusCode, String) {
-
-    info!("Agent requested `/r`");
-
     // Get current time for `registered` and `last_commit`.
     let now_utc: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
     let today_utc = now_utc.date_naive();
@@ -220,8 +216,6 @@ async fn task_ask(
     State(db_path): State<String>,
     Json(payload): Json<PlainData>,
 ) -> (StatusCode, String) {
-    info!("Agent requested `/t/a`");
-
     // Get the server kaypair
     let (my_secret, my_public) = match get_server_keypair(db_path.to_string()) {
         Ok((secret, public)) => (secret, public),
@@ -259,8 +253,6 @@ async fn task_upload(
     State(db_path): State<String>,
     Json(payload): Json<CipherData>,
 ) -> (StatusCode, Vec<u8>) {
-    info!("Agent requested `/t/u`");
-
     // Get the server kaypair
     let (my_secret, my_public) = match get_server_keypair(db_path.to_string()) {
         Ok((secret, public)) => (secret, public),
@@ -294,9 +286,6 @@ async fn task_upload(
 
     uploaded_file_path = uploaded_file_path.split("/").last().unwrap().to_string();
 
-    println!("agent_name: {}", agent_name);
-    println!("uploaded_file_path: {}", uploaded_file_path);
-
     match read_file(
         format!(
             "agents/{}/uploads/{}",
@@ -318,8 +307,6 @@ async fn task_result(
     State(db_path): State<String>,
     Json(payload): Json<CipherData>,
 ) -> (StatusCode, String) {
-    info!("Agent requested `/t/r`");
-
     // Get the server kaypair
     let (my_secret, my_public) = match get_server_keypair(db_path.to_string()) {
         Ok((secret, public)) => (secret, public),

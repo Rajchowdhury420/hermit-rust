@@ -18,10 +18,5 @@ $ hermit server
       +++++++++++++++++
       DEVELOPED BY HDKS
 
-[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/user/.hermit/server/listeners/listener_3943635548/certs/cert.pem created successfully.
-[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/user/.hermit/server/listeners/listener_3943635548/certs/key.pem created successfully.
-[2024-01-10T13:59:41Z WARN  hermit::server::db::listeners] Listener already exists in database.
-[2024-01-10T13:59:41Z INFO  hermit::server::server] listening on 0.0.0.0:9999
+[2024-01-10T13:59:41Z INFO  hermit::server::server]  Start gRPC server on http://::1:9999
 ```
-
-The C2 server will start on `0.0.0.0:9999` by default.

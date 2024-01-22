@@ -13,6 +13,7 @@ This is still in the early stages of development and still has minimal basic fun
 
 - C2 server
 - C2 client (CLI)
+- Communication between the C2 server and the C2 client over gRPC
 - HTTPS listener
 - Implant generation
 - AES encryption for each message
@@ -61,16 +62,13 @@ $ hermit server
       +++++++++++++++++
       DEVELOPED BY HDKS
 
-[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/user/.hermit/server/listeners/listener_3943635548/certs/cert.pem created successfully.
-[2024-01-10T13:59:41Z INFO  hermit::server::certs::https] /home/user/.hermit/server/listeners/listener_3943635548/certs/key.pem created successfully.
-[2024-01-10T13:59:41Z WARN  hermit::server::db::listeners] Listener already exists in database.
-[2024-01-10T13:59:41Z INFO  hermit::server::server] listening on 0.0.0.0:9999
+[2024-01-10T13:59:41Z INFO  hermit::server::server]  Start gRPC server on http://::1:9999
 ```
 
 ### C2 Client
 
 ```sh
-$ hermit client -H 0.0.0.0 -P 9999
+$ hermit client -P 9999
 
 
         ┓┏┏┓┳┓┳┳┓┳┏┳┓
@@ -80,8 +78,7 @@ $ hermit client -H 0.0.0.0 -P 9999
       +++++++++++++++++
       DEVELOPED BY HDKS
 
-[+] Handshake has been completed.
-[+] Connected to C2 server (ws://0.0.0.0:9999/hermit) successfully.
+[+] Connected the C2 server (http://[::1]:9999) successfully.
 
 Hermit $
 ```
@@ -95,6 +92,28 @@ Hermit $ help
 <br />
 
 ## INSTALLATION
+
+Clone the repository first.
+
+```sh
+git clone https://github.com/hideckies/hermit.git
+cd hermit
+```
+
+### Install Dependencies
+
+**Automatically (recommended):**  
+
+If you use Hermit on Linux system, it's recommended to use `install.sh` to make the installation process quickly and easily.
+
+```sh
+chmod +x install.sh
+./install.sh
+```
+
+**Manually:**  
+
+If you use Hermit on Windows system or would like to install manually, follow the [Installation](https://hermit.hdks.org/docs/installation/) page.
 
 ```sh
 git clone https://github.com/hideckies/hermit.git

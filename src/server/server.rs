@@ -53,7 +53,6 @@ impl HermitServer {
     ) -> Result<(), Error> {
         let _ = mkdir(format!("server/listeners/{}/certs", name.to_string()));
 
-        // If the protocol is `https`, create the server certificates
         if protocol == "https" {
             create_server_certs(
                 name.to_string(),

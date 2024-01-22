@@ -50,7 +50,7 @@ Specifically, you can use the following commands:
 |shell|Execute shell command for target machine.|
 |shellcode|Inject a shellcode for executing arbitrary commands in the new created process.|
 |sleep|Change sleep time for sending requests to C2 server.|
-|upload|Upload a file to target computer. (Under development)|
+|upload|Upload a file to target computer.|
 |whoami|Get current username.|
 |help|Print this message or the help of the given subcommand(s)|
 

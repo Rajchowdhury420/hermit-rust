@@ -7,11 +7,11 @@ toc=true
 
 ## Run (Connect to the C2 Server)
 
-At first, make sure that [the C2 server](./c2-server) has already started. It's running on the port `9999` by default.  
-Now run the `client` command to connect the C2 server.  
+Make sure that [the C2 server](./c2-server) has already started first.  
+Run the `client` command to connect the C2 server.  
 
 ```sh
-$ hermit client -H 0.0.0.0 -P 9999
+$ hermit client -P 9999
 
 
         ┓┏┏┓┳┓┳┳┓┳┏┳┓
@@ -21,13 +21,10 @@ $ hermit client -H 0.0.0.0 -P 9999
       +++++++++++++++++
       DEVELOPED BY HDKS
 
-[+] Handshake has been completed.
-[+] Connected to C2 server (ws://0.0.0.0:9999/hermit) successfully.
+[+] Connected the C2 server (http://[::1]:9999) successfully.
 
 Hermit $
 ```
-
-After connecting, the client console will start.
 
 <br />
 

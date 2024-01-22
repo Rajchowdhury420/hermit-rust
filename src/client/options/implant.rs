@@ -8,4 +8,5 @@ pub struct ImplantOption {
     pub sleep: Option<u64>,
     pub jitter: Option<u64>,
     pub user_agent: Option<String>,
+    pub killdate: Option<String>,
 }

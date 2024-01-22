@@ -13,6 +13,7 @@ pub struct Implant {
     pub sleep: u64,
     pub jitter: u64,
     pub user_agent: String,
+    pub killdate: String,
 }
 
 impl Implant {
@@ -26,6 +27,7 @@ impl Implant {
         sleep: u64,
         jitter: u64,
         user_agent: String,
+        killdate: String,
     ) -> Self {
         Self {
             id,
@@ -37,6 +39,7 @@ impl Implant {
             sleep,
             jitter,
             user_agent,
+            killdate,
         }
     }
 }
@@ -55,6 +58,7 @@ pub fn format_implant_details(implant: Implant) -> String {
     output = output + format!("{:<10} : {:<20}\n", "SLEEP", implant.sleep).as_str();
     output = output + format!("{:<10} : {:<20}\n", "JITTER", implant.jitter).as_str();
     output = output + format!("{:<10} : {:<20}\n", "USER AGENT", implant.user_agent).as_str();
+    output = output + format!("{:<10} : {:<20}\n", "KILLDATE", implant.killdate).as_str();
     output
 }
 

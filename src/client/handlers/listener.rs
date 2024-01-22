@@ -2,14 +2,10 @@ use colored::Colorize;
 use std::io::Error;
 use tonic::transport::Channel;
 
-use crate::server::{
-    grpc::{
-        self,
-        pb_common,
-        pb_hermitrpc::{hermit_rpc_client::HermitRpcClient, hermit_rpc_server::HermitRpc},
-        pb_operations,
-    },
-    listeners::listener::Listener,
+use crate::server::grpc::{
+    pb_common,
+    pb_hermitrpc::{hermit_rpc_client::HermitRpcClient, hermit_rpc_server::HermitRpc},
+    pb_operations,
 };
 use super::common::print_response;
 
@@ -32,7 +28,7 @@ pub async fn handle_listener_add(
     let response = match client.add_listener(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} The listener cannot be added: {:?}", "[x]".red(), e);
+            println!("\n{} The listener cannot be added: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -51,7 +47,7 @@ pub async fn handle_listener_delete(
     let response = match client.delete_listener(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} The listener cannot be deleted: {:?}", "[x]".red(), e);
+            println!("\n{} The listener cannot be deleted: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -70,7 +66,7 @@ pub async fn handle_listener_start(
     let response = match client.start_listener(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} The listener cannot be started: {:?}", "[x]".red(), e);
+            println!("\n{} The listener cannot be started: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -89,7 +85,7 @@ pub async fn handle_listener_stop(
     let response = match client.stop_listener(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} The listener cannot be stopped: {:?}", "[x]".red(), e);
+            println!("\n{} The listener cannot be stopped: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -108,7 +104,7 @@ pub async fn handle_listener_info(
     let response = match client.info_listener(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} Could not display the listener info: {:?}", "[x]".red(), e);
+            println!("\n{} Could not display the listener info: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -124,7 +120,7 @@ pub async fn handle_listener_list(
     let response = match client.list_listeners(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} List listeners failed: {:?}", "[x]".red(), e);
+            println!("\n{} List listeners failed: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };

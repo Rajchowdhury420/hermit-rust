@@ -18,6 +18,7 @@ This is still in the early stages of development and still has minimal basic fun
 
 - C2 server
 - C2 client (CLI)
+- Communication between the C2 server and the C2 client over gRPC
 - HTTPS listener
 - Implant generation
 - AES encryption for each message

@@ -3,10 +3,8 @@ use std::io::Error;
 use tonic::transport::Channel;
 
 use crate::server::grpc::{
-    self,
-    pb_agenttasks,
     pb_common,
-    pb_hermitrpc::{hermit_rpc_client::HermitRpcClient, hermit_rpc_server::HermitRpc},
+    pb_hermitrpc::hermit_rpc_client::HermitRpcClient,
     pb_operations,
 };
 use super::common::print_response;
@@ -22,7 +20,7 @@ pub async fn handle_operator_add(
     let response = match client.add_operator(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("{} The operator cannot be added: {:?}", "[x]".red(), e);
+            println!("\n{} The operator cannot be added: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -42,7 +40,7 @@ pub async fn handle_operator_info(
     let response = match client.info_operator(request).await {
         Ok(o) => o,
         Err(e) => {
-            println!("{} Could not get the operator info: {:?}", "[x]".red(), e);
+            println!("\n{} Could not get the operator info: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };
@@ -59,7 +57,7 @@ pub async fn handle_operator_list(
     let response = match client.list_operators(request).await {
         Ok(o) => o,
         Err(e) => {
-            println!("{} Could not list operators: {:?}", "[x]".red(), e);
+            println!("\n{} Could not list operators: {}", "[x]".red(), e.message());
             return Ok(());
         }
     };

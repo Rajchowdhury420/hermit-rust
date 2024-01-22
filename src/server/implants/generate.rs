@@ -27,10 +27,12 @@ pub fn generate(
     sleep: u64,
     jitter: u64,
     user_agent: String,
+    killdate: String,
 ) -> Result<(String, Vec<u8>), Error> {
 
     info!("Generating an implant...");
 
+    // Parse the listener URL
     let parsed_url = Url::parse(&listener_url).unwrap();
     let proto = parsed_url.scheme();
     let host = parsed_url.host().unwrap();
@@ -69,6 +71,7 @@ pub fn generate(
     env::set_var("HERMIT_SLEEP", sleep.to_string());
     env::set_var("HERMIT_JITTER", jitter.to_string());
     env::set_var("HERMIT_USER_AGENT", user_agent.to_string());
+    env::set_var("HERMIT_KILLDATE", killdate.to_string());
     env::set_var("HERMIT_PUBLIC_KEY", server_public_key.to_string());
     env::set_var("OUT_DIR", "implants/src".to_string());
 

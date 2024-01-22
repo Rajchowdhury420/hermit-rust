@@ -290,6 +290,10 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 Some(u) => u.to_string(),
                                 None => generate_user_agent(os.to_string(), arch.to_string()),
                             };
+                            let killdate = match subm2.get_one::<String>("killdate") {
+                                Some(k) => k.to_string(),
+                                None => "0".to_string(),
+                            };
         
                             options.implant_opt = Some(ImplantOption {
                                 name: Some(name),
@@ -300,6 +304,7 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 sleep: Some(sleep),
                                 jitter: Some(jitter),
                                 user_agent: Some(user_agent),
+                                killdate: Some(killdate),
                             });
                         }
                         Some(("download", subm2)) => {
@@ -318,6 +323,7 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 sleep: None,
                                 jitter: None,
                                 user_agent: None,
+                                killdate: None,
                             });
                         }
                         Some(("delete", subm2)) => {
@@ -336,6 +342,7 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 sleep: None,
                                 jitter: None,
                                 user_agent: None,
+                                killdate: None,
                             });
                         }
                         Some(("info", subm2)) => {
@@ -354,6 +361,7 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 sleep: None,
                                 jitter: None,
                                 user_agent: None,
+                                killdate: None,
                             });
                         }
                         Some(("list", _)) => {

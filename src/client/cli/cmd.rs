@@ -192,6 +192,12 @@ pub fn create_cmd(client: &HermitClient) -> Command {
                                 .long("user-agent")
                                 .help("Custom User-Agent")
                                 .value_parser(value_parser!(String)),
+                            Arg::new("killdate")
+                                .short('k')
+                                .long("killdate")
+                                .help("Specify the kill date (format: 'yyyy-mm-dd hh:mm:ss', example: '2024-01-01 00:00:00') to stop processing when a specified date is reached. The kill date is not specified by default.")
+                                .default_value("0")
+                                .value_parser(value_parser!(String)),
                         ])
                     )
                     .subcommand(Command::new("download")
