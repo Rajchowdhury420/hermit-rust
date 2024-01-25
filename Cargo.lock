@@ -1014,6 +1014,7 @@ dependencies = [
  "hyper 1.0.1",
  "hyper-util",
  "log",
+ "pad",
  "prost",
  "rand",
  "rcgen",
@@ -1538,6 +1539,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
+name = "pad"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ad9b889f1b12e0b9ee24db044b5129150d5eada288edc800f789928dc8c0e3"
+dependencies = [
+ "unicode-width",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1980,10 +1990,22 @@ dependencies = [
  "memchr",
  "nix",
  "radix_trie",
+ "rustyline-derive",
  "unicode-segmentation",
  "unicode-width",
  "utf8parse",
  "winapi",
+]
+
+[[package]]
+name = "rustyline-derive"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5af959c8bf6af1aff6d2b463a57f71aae53d1332da58419e30ad8dc7011d951"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.41",
 ]
 
 [[package]]

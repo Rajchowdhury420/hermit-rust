@@ -1,6 +1,10 @@
 use log::info;
+use pad::Alignment;
 
-use crate::utils::str::truncated_format;
+use crate::utils::str::{
+    table_format,
+    TableItem,
+};
 
 #[derive(Clone, Debug)]
 pub struct Implant {
@@ -47,18 +51,17 @@ impl Implant {
 pub fn format_implant_details(implant: Implant) -> String {
     info!("Getting the implant details...");
 
-    let mut output = String::new();
-    output = output + "\n";
-    output = output + format!("{:<10} : {:<20}\n", "ID", implant.id).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "NAME", implant.name).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "LISTENER", implant.url).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "OS",
+    let mut output = String::from("\n\n");
+    output = output + format!("{:<10} : {}\n", "ID", implant.id).as_str();
+    output = output + format!("{:<10} : {}\n", "NAME", implant.name).as_str();
+    output = output + format!("{:<10} : {}\n", "LISTENER", implant.url).as_str();
+    output = output + format!("{:<10} : {}\n", "OS",
         format!("{}/{}", implant.os.to_owned(), implant.arch.to_owned())).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "FORMAT", implant.format).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "SLEEP", implant.sleep).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "JITTER", implant.jitter).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "USER AGENT", implant.user_agent).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "KILLDATE", implant.killdate).as_str();
+    output = output + format!("{:<10} : {}\n", "FORMAT", implant.format).as_str();
+    output = output + format!("{:<10} : {}\n", "SLEEP", implant.sleep).as_str();
+    output = output + format!("{:<10} : {}\n", "JITTER", implant.jitter).as_str();
+    output = output + format!("{:<10} : {}\n", "USER AGENT", implant.user_agent).as_str();
+    output = output + format!("{:<10} : {}", "KILLDATE", implant.killdate).as_str();
     output
 }
 
@@ -68,26 +71,26 @@ pub fn format_all_implants(implants: &Vec<Implant>) -> String  {
         return "Implants are empty".to_string();
     }
 
-    let mut output = String::new();
-    output = output + "\n";
-    output = output + format!(
-        "{:>5} | {:<20} | {:<26} | {:<18} | {:<6} | {:>5}\n",
-        "ID", "NAME", "LISTENER", "OS", "FORMAT", "SLEEP",
-    ).as_str();
-    let output_len = output.len();
-    output = output + "-".repeat(output_len).as_str() + "\n";
-
+    let columns = vec![
+        TableItem::new("ID".to_string(), 3, Alignment::Right, None),
+        TableItem::new("NAME".to_string(), 14, Alignment::Left, None),
+        TableItem::new("LISTENER".to_string(), 16, Alignment::Left, None),
+        TableItem::new("OS".to_string(), 12, Alignment::Left, None),
+        TableItem::new("FORMAT".to_string(), 6, Alignment::Left, None),
+        TableItem::new("SLEEP".to_string(), 5, Alignment::Right, None),
+    ];
+    let mut rows: Vec<Vec<TableItem>> = Vec::new();
     for implant in implants {
-        output = output + format!(
-            "{:>5} | {:<20} | {:<26} | {:<18} | {:<6} | {:>5}\n",
-            implant.id.to_owned(),
-            truncated_format(implant.name.to_owned(), 17),
-            truncated_format(implant.url.to_owned(), 23),
-            truncated_format(format!("{}/{}", implant.os.to_owned(), implant.arch.to_owned()), 15),
-            implant.format.to_owned(),
-            implant.sleep.to_owned(),
-        ).as_str();
+        let row = vec![
+            TableItem::new(implant.id.to_string(), 3, Alignment::Right, None),
+            TableItem::new(implant.name.to_string(), 14, Alignment::Left, None),
+            TableItem::new(implant.url.to_string(), 16, Alignment::Left, None),
+            TableItem::new(
+                format!("{}/{}", implant.os.to_string(), implant.arch.to_string()), 12, Alignment::Left, None),
+            TableItem::new(implant.format.to_string(), 6, Alignment::Left, None),
+            TableItem::new(implant.sleep.to_string(), 5, Alignment::Right, None),
+        ];
+        rows.push(row);
     }
-
-    return output;
+    table_format(columns, rows)
 }

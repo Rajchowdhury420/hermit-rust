@@ -1,7 +1,9 @@
 use log::{error, info};
-use std::io::{Error, ErrorKind};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{
+    io::{Error, ErrorKind},
+    net::SocketAddr,
+    sync::Arc,
+};
 use tokio::sync::{broadcast, Mutex};
 
 use super::{

@@ -1,64 +1,82 @@
 use base64::prelude::*;
 use clap::ArgMatches;
 
-use super::{
-    client::{HermitClient, Mode},
-    options::{
-        agent::AgentOption,
-        implant::ImplantOption,
-        listener::ListenerOption,
-        options::Options,
-        task::TaskOption, operator::OperatorOption,
-    },
-};
+use super::client::{HermitClient, Mode};
 use crate::{
     server::listeners::https::generate_user_agent,
     utils::random::random_name,
 };
 
 #[derive(Debug)]
-pub enum Operation {
-    // Root operations
-    // Common
-    Empty,
-    Error(String),
+pub enum RootOperation {
     Exit,
-    Unknown,
-    // Operators
-    // AddOperator,
-    // DeleteOperator,
-    InfoOperator,
-    ListOperators,
-    // Listeners
-    AddListener,
-    DeleteListener,
-    StartListener,
-    StopListener,
-    InfoListener,
-    ListListeners,
-    // Agents
-    UseAgent,
-    DeleteAgent,
-    InfoAgent,
-    ListAgents,
-    // Implants
-    GenerateImplant,
-    DownloadImplant,
-    DeleteImplant,
-    InfoImplant,
-    ListImplants,
 
-    // Agent operations
-    // Common
-    AgentEmpty,
-    AgentExit,
-    AgentUnknown,
-    AgentTask(String), // The argument is the task name
+    // Operator
+    // OperatorAdd,
+    // OperatorDelete,
+    OperatorInfo { name: String },
+    OperatorList,
+
+    // Listener
+    ListenerAdd {
+        name: String,
+        domains: Vec<String>,
+        proto: String,
+        host: String,
+        port: u16,
+    },
+    ListenerDelete { name: String },
+    ListenerStart { name: String },
+    ListenerStop { name: String },
+    ListenerInfo { name: String },
+    ListenerList,
+
+    // Agent
+    AgentUse { name: String },
+    AgentDelete { name: String },
+    AgentInfo { name: String },
+    AgentList,
+
+    // Implant
+    ImplantGenerate {
+        name: String,
+        url: String,
+        os: String,
+        arch: String,
+        format: String,
+        sleep: u64,
+        jitter: u64,
+        user_agent: String,
+        killdate: String,
+    },
+    ImplantDownload { name: String },
+    ImplantDelete { name: String },
+    ImplantInfo { name: String },
+    ImplantList,
 }
 
-pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation, Options) {
-    let mut op = Operation::Empty;
-    let mut options = Options::new();
+#[derive(Debug)]
+pub enum AgentOperation {
+    Exit,
+    Task {
+        agent: String,  // An agent name
+        task: String,   // A task name e.g. "cat"
+        args: String,   // Task arguments e.g. a specified file name
+    },
+}
+
+#[derive(Debug)]
+pub enum Operation {
+    Root(RootOperation),
+    Agent(AgentOperation),
+
+    Empty,
+    Error { message: String },
+    Unknown,
+}
+
+pub fn set_operation(client: &HermitClient, matches: &ArgMatches) -> Operation {
+    // let mut op = Operation::Root(RootOperation::Empty);
 
     match &client.mode {
         Mode::Root => {
@@ -82,182 +100,127 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                         //     op = Operation::DeleteOperator;
                         // }
                         Some(("info", subm2)) => {
-                            op = Operation::InfoOperator;
                             let target = match subm2.get_one::<String>("operator") {
-                                Some(n) => { Some(n.to_owned()) },
-                                None => { None },
+                                Some(n) => n.to_owned(),
+                                None => return Operation::Error { message: "Invalid argument.".to_string() },
                             };
-
-                            options.operator_opt = Some(OperatorOption {
-                                name: target,
-                            });
+                            return Operation::Root(RootOperation::OperatorInfo { name: target });
                         }
                         Some(("list", _)) => {
-                            op = Operation::ListOperators;
+                            return Operation::Root(RootOperation::OperatorList);
                         }
                         _ => {
-                            op = Operation::Unknown;
+                            return Operation::Unknown;
                         }
                     }
                 }
                 Some(("operators", _)) => {
-                    op = Operation::ListOperators;
+                    return Operation::Root(RootOperation::OperatorList);
                 }
                 Some(("whoami", _)) => {
-                    op = Operation::InfoOperator;
-                    
-                    options.operator_opt = Some(OperatorOption {
-                        name: Some(client.operator_name.to_string()),
-                    });
+                    return Operation::Root(
+                        RootOperation::OperatorInfo {
+                            name: client.operator_name.to_string()
+                        });
                 }
                 // Listener
                 Some(("listener", subm)) => {
                     match subm.subcommand() {
                         Some(("add", subm2)) => {
-                            op = Operation::AddListener;
                             let name = match subm2.get_one::<String>("name") {
-                                Some(n) => Some(n.to_owned()),
-                                None => Some(random_name("listener".to_owned())),
+                                Some(n) => n.to_owned(),
+                                None => random_name("listener".to_owned()),
                             };
-                            let domains: Option<Vec<String>> = match subm2.get_one::<String>("domains") {
-                                Some(n) => {
-                                    Some(n.split(",").map(|s| s.to_string()).collect())
-                                }
-                                None => Some(Vec::new()),
+                            let domains: Vec<String> = match subm2.get_one::<String>("domains") {
+                                Some(n) => n.split(",").map(|s| s.to_string()).collect(),
+                                None => Vec::new(),
                             };
-
-                            let listener_option = ListenerOption {
+                            return Operation::Root(RootOperation::ListenerAdd {
                                 name,
                                 domains,
-                                proto: subm2.get_one::<String>("protocol").cloned(),
-                                host: subm2.get_one::<String>("host").cloned(),
-                                port: subm2.get_one::<u16>("port").cloned(),
-                            };
-                            options.listener_opt = Some(listener_option);
+                                proto: subm2.get_one::<String>("protocol").unwrap().to_string(),
+                                host: subm2.get_one::<String>("host").unwrap().to_string(),
+                                port: *subm2.get_one::<u16>("port").unwrap(),
+                            })
                         }
                         Some(("delete", subm2)) => {
-                            op = Operation::DeleteListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(n) => { Some(n.to_owned()) },
-                                None => { None },
+                                Some(n) => n.to_owned(),
+                                None => return Operation::Error { message: "Invalid argument.".to_string() },
                             };
-        
-                            options.listener_opt = Some(ListenerOption {
-                                name: target,
-                                domains: None,
-                                proto: None,
-                                host: None,
-                                port: None,
-                            });
+                            return Operation::Root(RootOperation::ListenerDelete { name: target });
                         }
                         Some(("start", subm2)) => {
-                            op = Operation::StartListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(n) => { Some(n.to_owned()) },
-                                None => { None },
+                                Some(n) => n.to_owned(),
+                                None => return Operation::Error { message: "Invalid argument.".to_string() },
                             };
-        
-                            options.listener_opt = Some(ListenerOption {
-                                name: target,
-                                domains: None,
-                                proto: None,
-                                host: None,
-                                port: None,
-                            });
+                            return Operation::Root(RootOperation::ListenerStart { name: target });
                         }
                         Some(("stop", subm2)) => {
-                            op = Operation::StopListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(n) => { Some(n.to_owned()) },
-                                None => { None },
+                                Some(n) => n.to_owned(),
+                                None => return Operation::Error { message: "Invalid argument.".to_string() },
                             };
-        
-                            options.listener_opt = Some(ListenerOption {
-                                name: target,
-                                domains: None,
-                                proto: None,
-                                host: None,
-                                port: None,
-                            });
+                            return Operation::Root(RootOperation::ListenerStop { name: target });
                         }
                         Some(("info", subm2)) => {
-                            op = Operation::InfoListener;
                             let target = match subm2.get_one::<String>("listener") {
-                                Some(n) => { Some(n.to_owned()) },
-                                None => { None },
+                                Some(n) => n.to_owned(),
+                                None => return Operation::Error { message: "Invalid argument.".to_string() },
                             };
-
-                            options.listener_opt = Some(ListenerOption {
-                                name: target,
-                                domains: None,
-                                proto: None,
-                                host: None,
-                                port: None,
-                            });
+                            return Operation::Root(RootOperation::ListenerInfo { name: target });
                         }
                         Some(("list", _)) => {
-                            op = Operation::ListListeners;
+                            return Operation::Root(RootOperation::ListenerList);
                         }
                         _ => {
-                            op = Operation::Unknown;
+                            return Operation::Unknown;
                         }
                     }
                 }
                 Some(("listeners", _)) => {
-                    op = Operation::ListListeners;
+                    return Operation::Root(RootOperation::ListenerList);
                 }
                 // Agent
                 Some(("agent", subm)) => {
                     match subm.subcommand() {
                         Some(("use", subm2)) => {
-                            op = Operation::UseAgent;
                             let name = match subm2.get_one::<String>("name") {
-                                Some(n) => { n.to_owned() },
-                                None => { "0".to_owned() },
+                                Some(n) => n.to_owned(),
+                                None => "0".to_owned(),
                             };
-        
-                            options.agent_opt = Some(AgentOption {
-                                name,
-                            });
+                            return Operation::Root(RootOperation::AgentUse { name });
                         }
                         Some(("delete", subm2)) => {
-                            op = Operation::DeleteAgent;
                             let name = match subm2.get_one::<String>("name") {
                                 Some(n) => { n.to_owned() },
                                 None => { "0".to_owned() },
                             };
-
-                            options.agent_opt = Some(AgentOption {
-                                name,
-                            });
+                            return Operation::Root(RootOperation::AgentDelete { name });
                         }
                         Some(("info", subm2)) => {
-                            op = Operation::InfoAgent;
                             let name = match subm2.get_one::<String>("name") {
-                                Some(n) => { n.to_owned() },
-                                None => { "0".to_owned() },
+                                Some(n) => n.to_owned(),
+                                None => "0".to_owned(),
                             };
-
-                            options.agent_opt = Some(AgentOption {
-                                name,
-                            });
+                            return Operation::Root(RootOperation::AgentInfo { name });
                         }
                         Some(("list", _)) => {
-                            op = Operation::ListAgents;
+                            return Operation::Root(RootOperation::AgentList);
                         }
                         _ => {
-                            op = Operation::Unknown;
+                            return Operation::Unknown;
                         }
                     }
                 }
                 Some(("agents", _)) => {
-                    op = Operation::ListAgents;
+                    return Operation::Root(RootOperation::AgentList);
                 }
                 // Implant
                 Some(("implant", subm)) => {
                     match subm.subcommand() {
                         Some(("gen", subm2)) => {
-                            op = Operation::GenerateImplant;
                             let name = match subm2.get_one::<String>("name") {
                                 Some(n) => n.to_string(),
                                 None => { random_name("implant".to_owned()) }
@@ -294,96 +257,59 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 Some(k) => k.to_string(),
                                 None => "0".to_string(),
                             };
-        
-                            options.implant_opt = Some(ImplantOption {
-                                name: Some(name),
-                                url: Some(url),
-                                os: Some(os),
-                                arch: Some(arch),
-                                format: Some(format),
-                                sleep: Some(sleep),
-                                jitter: Some(jitter),
-                                user_agent: Some(user_agent),
-                                killdate: Some(killdate),
+                            return Operation::Root(RootOperation::ImplantGenerate {
+                                name,
+                                url,
+                                os,
+                                arch,
+                                format,
+                                sleep,
+                                jitter,
+                                user_agent,
+                                killdate,
                             });
                         }
                         Some(("download", subm2)) => {
-                            op = Operation::DownloadImplant;
                             let name = match subm2.get_one::<String>("name") {
                                 Some(n) => n.to_owned(),
                                 None => "0".to_owned(),
                             };
-        
-                            options.implant_opt = Some(ImplantOption {
-                                name: Some(name),
-                                url: None,
-                                os: None,
-                                arch: None,
-                                format: None,
-                                sleep: None,
-                                jitter: None,
-                                user_agent: None,
-                                killdate: None,
-                            });
+                            return Operation::Root(RootOperation::ImplantDownload { name });
                         }
                         Some(("delete", subm2)) => {
-                            op = Operation::DeleteImplant;
                             let name = match subm2.get_one::<String>("name") {
                                 Some(n) => n.to_owned(),
                                 None => "0".to_owned(),
                             };
-
-                            options.implant_opt = Some(ImplantOption {
-                                name: Some(name),
-                                url: None,
-                                os: None,
-                                arch: None,
-                                format: None,
-                                sleep: None,
-                                jitter: None,
-                                user_agent: None,
-                                killdate: None,
-                            });
+                            return Operation::Root(RootOperation::ImplantDelete { name });
                         }
                         Some(("info", subm2)) => {
-                            op = Operation::InfoImplant;
                             let name = match subm2.get_one::<String>("name") {
                                 Some(n) => n.to_owned(),
                                 None => "0".to_owned(),
                             };
-
-                            options.implant_opt = Some(ImplantOption {
-                                name: Some(name),
-                                url: None,
-                                os: None,
-                                arch: None,
-                                format: None,
-                                sleep: None,
-                                jitter: None,
-                                user_agent: None,
-                                killdate: None,
-                            });
+                            return Operation::Root(RootOperation::ImplantInfo { name });
                         }
                         Some(("list", _)) => {
-                            op = Operation::ListImplants;
+                            return Operation::Root(RootOperation::ImplantList);
                         }
                         _ => {
-                            op = Operation::Unknown;
+                            return Operation::Unknown;
                         }
                     }
                 }
                 Some(("implants", _)) => {
-                    op = Operation::ListImplants;
+                    return Operation::Root(RootOperation::ImplantList);
                 }
                 // Misc
                 Some(("exit", _)) | Some(("quit", _)) => {
-                    op = Operation::Exit;
+                    return Operation::Root(RootOperation::Exit);
                 }
                 None => {
-                    op = Operation::Empty;
+                    return Operation::Empty;
                 }
                 _ => {
-                    op = Operation::Unknown;
+                    return Operation::Unknown;
                 },
             }
         }
@@ -391,120 +317,109 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
             match matches.subcommand() {
                 // Tasks
                 Some(("cat", subm)) => {
-                    op = Operation::AgentTask("cat".to_string());
-
                     let file = match subm.get_one::<String>("file") {
                         Some(f) => f.to_owned(),
                         None => "".to_owned(),
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(file),
-                    });                    
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "cat".to_string(),
+                        args: file,
+                    });
                 }
                 Some(("cd", subm)) => {
-                    op = Operation::AgentTask("cd".to_string());
-
                     let dir = match subm.get_one::<String>("directory") {
                         Some(d) => d.to_owned(),
                         None => "".to_owned(),
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(dir),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "cd".to_string(),
+                        args: dir,
                     });
                 }
                 Some(("cp", subm)) => {
-                    op = Operation::AgentTask("cp".to_string());
-
                     let src = match subm.get_one::<String>("source") {
                         Some(s) => s.to_owned(),
                         None => "".to_owned(),
                     };
-
                     let dest = match subm.get_one::<String>("dest") {
                         Some(d) => d.to_owned(),
                         None => "".to_owned(),
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(src + " " + dest.as_str()),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "cp".to_string(),
+                        args: src + " " + dest.as_str(),
                     });
                 }
                 Some(("download", subm)) => {
-                    op = Operation::AgentTask("download".to_string());
-
                     let file = match subm.get_one::<String>("file") {
                         Some(f) => f.to_owned(),
                         None => "".to_owned(),
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(file),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "download".to_string(),
+                        args: file,
                     });
                 }
                 Some(("info", _)) => {
-                    op = Operation::AgentTask("info".to_string());
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: None,
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "info".to_string(),
+                        args: "".to_string(),
                     });
                 }
                 Some(("ls", subm)) => {
-                    op = Operation::AgentTask("ls".to_string());
-
                     let dir = match subm.get_one::<String>("directory") {
                         Some(d) => d.to_owned(),
-                        None => "".to_owned(),
+                        None => ".".to_owned(),
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(dir),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "ls".to_string(),
+                        args: dir,
                     });
                 }
                 Some(("mkdir", subm)) => {
-                    op = Operation::AgentTask("mkdir".to_string());
-
                     let dir = match subm.get_one::<String>("directory") {
                         Some(d) => d.to_owned(),
-                        None => "".to_owned(),
+                        None => {
+                            return Operation::Error {
+                                message: "Specify a directory to create.".to_string()
+                            };
+                        },
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(dir),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "mkdir".to_string(),
+                        args: dir,
                     });
                 }
                 Some(("net", subm)) => {
-                    op = Operation::AgentTask("net".to_string());
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: None,
-                    });
+                    // TODO: Implement `net status <interface>`, `net stop <interface>`, etc.
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "net".to_string(),
+                        args: "".to_string(),
+                    })
                 }
                 Some(("ps", subm)) => {
-                    op = Operation::AgentTask("ps".to_string());
-
                     match subm.subcommand() {
                         Some(("kill", subm2)) => {
                             let pid = match subm2.get_one::<u32>("pid") {
                                 Some(p) => p.to_string(),
                                 None => {
-                                    op = Operation::Error("Process ID not specified.".to_string());
-                                    "".to_string()
+                                    return Operation::Error {
+                                        message: "Process ID not specified.".to_string(),
+                                    };
                                 },
                             };
-
-                            options.task_opt = Some(TaskOption {
-                                agent_name: Some(agent_name.to_owned()),
-                                args: Some("kill ".to_string() + pid.as_str()),
+                            return Operation::Agent(AgentOperation::Task {
+                                agent: agent_name.to_string(),
+                                task: "ps".to_string(),
+                                args: "kill ".to_string() + pid.as_str(),
                             });
                         }
                         Some(("list", subm2)) => {
@@ -512,32 +427,31 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 Some(f) => f.to_owned(),
                                 None => "*".to_owned(),
                             };
-        
                             let exclude = match subm2.get_one::<String>("exclude") {
                                 Some(x) => x.to_owned(),
                                 None => "".to_owned(),
                             };
-        
-                            options.task_opt = Some(TaskOption {
-                                agent_name: Some(agent_name.to_owned()),
-                                args: Some("list ".to_string() + filter.as_str() + ":" + exclude.as_str()),
+                            return Operation::Agent(AgentOperation::Task {
+                                agent: agent_name.to_string(),
+                                task: "ps".to_string(),
+                                args: "list ".to_string() + filter.as_str() + ":" + exclude.as_str(),
                             });
                         }
                         _ => {
-                            op = Operation::Error("Subcommand not specified.".to_string());
+                            return Operation::Error {
+                                message: "Subcommand not specified.".to_string(),
+                            };
                         }
                     }
-
                 }
                 Some(("pwd", _)) => {
-                    op = Operation::AgentTask("pwd".to_string());
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: None,
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "pwd".to_string(),
+                        args: "".to_string(),
                     });
                 }
                 Some(("rm", subm)) => {
-                    op = Operation::AgentTask("rm".to_string());
                     let mut file = match subm.get_one::<String>("file") {
                         Some(f) => f.to_owned(),
                         None => "".to_owned(),
@@ -547,32 +461,27 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                         file = file + " -r";
                     }
 
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(file),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "rm".to_string(),
+                        args: file,
                     });
                 }
                 Some(("screenshot", _)) => {
-                    op = Operation::AgentTask("screenshot".to_string());
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: None,
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "screenshot".to_string(),
+                        args: "".to_string(),
                     });
                 }
                 Some(("shell", subm)) => {
-                    op = Operation::AgentTask("shell".to_string());
-
+                    let mut args = String::new();
                     match agent_os.as_str() {
                         "linux" => {
-                            let command = match subm.get_one::<String>("command") {
+                            args = match subm.get_one::<String>("command") {
                                 Some(c) => c.to_owned(),
                                 None => "".to_owned(),
                             };
-
-                            options.task_opt = Some(TaskOption {
-                                agent_name: Some(agent_name.to_owned()),
-                                args: Some(command),
-                            });
                         }
                         "windows" | _ => {
                             let mut pre = "cmd";
@@ -583,18 +492,18 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                                 Some(c) => c.to_owned(),
                                 None => "".to_owned(),
                             };
-        
-                            options.task_opt = Some(TaskOption {
-                                agent_name: Some(agent_name.to_owned()),
-                                args: Some(pre.to_string() + " " + command.as_str()),
-                            });
+
+                            args = pre.to_string() + " " + command.as_str();
                         }
                     }
 
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "shell".to_string(),
+                        args,
+                    });
                 }
                 Some(("shellcode", subm)) => {
-                    op = Operation::AgentTask("shellcode".to_string());
-
                     let pid = match subm.get_one::<u32>("pid") {
                         Some(p) => p.to_string(),
                         None => "".to_string(),
@@ -620,43 +529,41 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                             let shellcode = match std::fs::read(f.to_string()) {
                                 Ok(s) => s,
                                 Err(e) => {
-                                    // println!("Error reading shellcode file: {}", e);
-                                    op = Operation::Error(format!("Error reading shellcode file: {}", e));
-                                    "nop".as_bytes().to_vec()
+                                    return Operation::Error {
+                                        message: format!("Error reading shellcode file: {}", e),
+                                    };
                                 }
                             };
 
                             base64::prelude::BASE64_STANDARD.encode(shellcode)
                         },
                         None => {
-                            op = Operation::Error("Shellcode file not specified.".to_string());
-                            base64::prelude::BASE64_STANDARD.encode("nop".as_bytes().to_vec())
+                            return Operation::Error {
+                                message: "Shellcode file not specified.".to_string(),
+                            };
                         },
                     };
 
                     args = args + " " + shellcode.as_str();
 
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(args),
-                    });
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "shellcode".to_string(),
+                        args,
+                    })
                 }
                 Some(("sleep", subm)) => {
-                    op = Operation::AgentTask("sleep".to_string());
-
                     let sleeptime = match subm.get_one::<u64>("time") {
-                        Some(t) => *t,
-                        None => 3 as u64,
+                        Some(t) => t.to_string(),
+                        None => "3".to_string(),
                     };
-
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(sleeptime.to_string()),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "sleep".to_string(),
+                        args: sleeptime,
                     });
                 }
                 Some(("upload", subm)) => {
-                    op = Operation::AgentTask("upload".to_string());
-
                     let uploaded_file = match subm.get_one::<String>("file") {
                         Some(f) => f.to_string(),
                         None => "".to_string(),
@@ -666,31 +573,30 @@ pub fn set_operations(client: &HermitClient, matches: &ArgMatches) -> (Operation
                         None => "".to_string(),
                     };
 
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: Some(uploaded_file + " " + dest.as_str()),
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "upload".to_string(),
+                        args: uploaded_file + " " + dest.as_str(),
                     });
                 }
                 Some(("whoami", _)) => {
-                    op = Operation::AgentTask("whoami".to_string());
-                    options.task_opt = Some(TaskOption {
-                        agent_name: Some(agent_name.to_owned()),
-                        args: None,
+                    return Operation::Agent(AgentOperation::Task {
+                        agent: agent_name.to_string(),
+                        task: "whoami".to_string(),
+                        args: "".to_string(),
                     });
                 }
                 // Misc
                 Some(("exit", _)) | Some(("quit", _)) => {
-                    op = Operation::AgentExit;
+                    return Operation::Agent(AgentOperation::Exit);
                 }
                 None => {
-                    op = Operation::AgentEmpty;
+                    return Operation::Empty;
                 }
                 _ => {
-                    op = Operation::AgentUnknown;
+                    return Operation::Unknown;
                 }
             }
         }
     }
-
-    (op, options)
 }

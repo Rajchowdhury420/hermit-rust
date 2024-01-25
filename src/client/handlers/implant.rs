@@ -74,6 +74,7 @@ pub async fn handle_implant_generate(
     write_file(outfile.to_string(), &implant_data).unwrap();
 
     spin.stop();
+    println!(""); // Add newline for good appearance
 
     println!(
         "{} Implant generated at {}",
@@ -130,6 +131,7 @@ pub async fn handle_implant_download(
     write_file(outfile.to_string(), &implant_data).unwrap();
 
     spin.stop();
+    println!(""); // Add newline for good appearance
 
     println!(
         "{} Implant generated at {}",

@@ -1,6 +1,10 @@
 use log::info;
+use pad::Alignment;
 
-use crate::utils::str::truncated_format;
+use crate::utils::str::{
+    table_format,
+    TableItem,
+};
 
 #[derive(Clone, Debug)]
 pub struct Operator {
@@ -22,11 +26,10 @@ impl Operator {
 pub fn format_operator_details(operator: Operator) -> String {
     info!("Getting operator details...");
 
-    let mut output = String::new();
-    output = output + "\n";
-    output = output + format!("{:<10} : {:<20}\n", "ID", operator.id).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "NAME", operator.name).as_str();
-    output = output + format!("{:<10} : {:<20}\n", "FORMAT", operator.address).as_str();
+    let mut output = String::from("\n\n");
+    output = output + format!("{:<8} : {}\n", "ID", operator.id).as_str();
+    output = output + format!("{:<8} : {}\n", "NAME", operator.name).as_str();
+    output = output + format!("{:<8} : {}", "FORMAT", operator.address).as_str();
     output
 }
 
@@ -36,23 +39,19 @@ pub fn format_all_operators(operators: &Vec<Operator>) -> String {
         return String::new();
     }
 
-    let mut output = String::new();
-    output = output + "\n";
-    output = output + format!(
-        "{:>5} | {:<20} | {:<20}\n",
-        "ID", "NAME", "ADDRESS",
-    ).as_str();
-    let output_len = output.len();
-    output = output + "-".repeat(output_len).as_str() + "\n";
-
+    let columns = vec![
+        TableItem::new("ID".to_string(), 3, Alignment::Right, None),
+        TableItem::new("NAME".to_string(), 14, Alignment::Left, None),
+        TableItem::new("ADDRESS".to_string(), 16, Alignment::Left, None),
+    ];
+    let mut rows: Vec<Vec<TableItem>> = Vec::new();
     for operator in operators {
-        output = output + format!(
-            "{:>5} | {:<20} | {:<20}\n",
-            operator.id.to_owned(),
-            truncated_format(operator.name.to_owned(), 17),
-            truncated_format(operator.address.to_owned(), 17),
-        ).as_str();
+        let row = vec![
+            TableItem::new(operator.id.to_string(), 3, Alignment::Right, None),
+            TableItem::new(operator.name.to_string(), 14, Alignment::Left, None),
+            TableItem::new(operator.address.to_string(), 16, Alignment::Left, None),
+        ];
+        rows.push(row);
     }
-
-    return output;
+    table_format(columns, rows)
 }

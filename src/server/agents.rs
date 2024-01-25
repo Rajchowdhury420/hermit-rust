@@ -1,7 +1,11 @@
 use chrono::NaiveDate;
 use log::info;
+use pad::Alignment;
 
-use crate::utils::str::truncated_format;
+use crate::utils::str::{
+    table_format,
+    TableItem,
+};
 
 
 #[derive(Clone, Debug)]
@@ -47,16 +51,15 @@ impl Agent {
 pub fn format_agent_details(agent: Agent) -> String {
     info!("Getting the agent details...");
 
-    let mut output = String::new();
-    output = output + "\n";
-    output = output + format!("{:<15} : {:<20}\n", "ID", agent.id).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "NAME", agent.name).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "HOSTNAME", agent.hostname).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "OS", format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned())).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "LISTENER", agent.listener_url).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "PUBLIC KEY", agent.public_key).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "REGISTERED", agent.registered.to_string()).as_str();
-    output = output + format!("{:<15} : {:<20}\n", "LAST COMMIT", agent.last_commit.to_string()).as_str();
+    let mut output = String::from("\n\n");
+    output = output + format!("{:<12} : {}\n", "ID", agent.id).as_str();
+    output = output + format!("{:<12} : {}\n", "NAME", agent.name).as_str();
+    output = output + format!("{:<12} : {}\n", "HOSTNAME", agent.hostname).as_str();
+    output = output + format!("{:<12} : {}\n", "OS", format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned())).as_str();
+    output = output + format!("{:<12} : {}\n", "LISTENER", agent.listener_url).as_str();
+    output = output + format!("{:<12} : {}\n", "PUBLIC KEY", agent.public_key).as_str();
+    output = output + format!("{:<12} : {}\n", "REGISTERED", agent.registered.to_string()).as_str();
+    output = output + format!("{:<12} : {}", "LAST COMMIT", agent.last_commit.to_string()).as_str();
     output
 }
 
@@ -66,26 +69,26 @@ pub fn format_all_agents(agents: &Vec<Agent>) -> String  {
         return "Agents are empty".to_string();
     }
 
-    let mut output = String::new();
-    output = output + "\n";
-    output = output + format!(
-        "{:>3} | {:<18} | {:<15} | {:<15} | {:<25} | {:<15}\n",
-        "ID", "NAME", "HOSTNAME", "OS", "LISTENER", "LAST COMMIT"
-    ).as_str();
-    let output_len = output.len();
-    output = output + "-".repeat(output_len).as_str() + "\n";
-
+    let columns = vec![
+        TableItem::new("ID".to_string(), 3, Alignment::Right, None),
+        TableItem::new("NAME".to_string(), 12, Alignment::Left, None),
+        TableItem::new("HOSTNAME".to_string(), 12, Alignment::Left, None),
+        TableItem::new("OS".to_string(), 12, Alignment::Left, None),
+        TableItem::new("LISTENER".to_string(), 20, Alignment::Left, None),
+        TableItem::new("LAST COMMIT".to_string(), 13, Alignment::Left, None),
+    ];
+    let mut rows: Vec<Vec<TableItem>> = Vec::new();
     for agent in agents {
-        output = output + format!(
-            "{:>3} | {:<18} | {:<15} | {:<15} | {:<25} | {:<15}\n",
-            agent.id.to_owned(),
-            truncated_format(agent.name.to_owned(), 15),
-            truncated_format(agent.hostname.to_owned(), 12),
-            format!("{}/{}", agent.os.to_owned(), agent.arch.to_owned()),
-            truncated_format(agent.listener_url.to_owned(), 22),
-            agent.last_commit.to_string(),
-        ).as_str();
+        let row = vec![
+            TableItem::new(agent.id.to_string(), 3, Alignment::Right, None),
+            TableItem::new(agent.name.to_string(), 12, Alignment::Left, None),
+            TableItem::new(agent.hostname.to_string(), 12, Alignment::Left, None),
+            TableItem::new(
+                format!("{}/{}", agent.os.to_string(), agent.arch.to_string()), 12, Alignment::Left, None),
+            TableItem::new(agent.listener_url.to_string(), 20, Alignment::Left, None),
+            TableItem::new(agent.last_commit.to_string(), 13, Alignment::Left, None),
+        ];
+        rows.push(row);
     }
-
-    output
+    table_format(columns, rows)
 }

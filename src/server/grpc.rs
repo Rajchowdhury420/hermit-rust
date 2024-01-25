@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{mpsc, Mutex};
-use tokio_stream::{wrappers::ReceiverStream};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 use crate::utils::{
@@ -53,9 +53,7 @@ pub mod pb_hermitrpc {
 use pb_agenttasks::Task;
 use pb_common::{Empty, Result as RpcResult};
 use pb_operations::{NewImplant, NewListener, NewOperator, Target};
-use pb_hermitrpc::{
-    hermit_rpc_server::HermitRpc,
-};
+use pb_hermitrpc::hermit_rpc_server::HermitRpc;
 
 #[derive(Debug)]
 pub struct HermitRpcService {

@@ -1,8 +1,27 @@
 use clap::{ArgMatches, Command};
 use colored::Colorize;
-use rustyline::{DefaultEditor, Result};
-use rustyline::error::ReadlineError;
-use std::process;
+use rustyline::{
+    Cmd,
+    Completer,
+    completion::FilenameCompleter,
+    CompletionType,
+    DefaultEditor,
+    EditMode,
+    Editor,
+    error::ReadlineError,
+    Helper,
+    highlight::{Highlighter, MatchingBracketHighlighter},
+    hint::HistoryHinter,
+    Hinter,
+    KeyEvent,
+    Result,
+    validate::MatchingBracketValidator,
+    Validator,
+};
+use std::{
+    borrow::Cow::{self, Borrowed, Owned},
+    process
+};
 
 use super::{
     cli::cmd::create_cmd,
@@ -35,8 +54,7 @@ use super::{
             handle_operator_list,
         }
     },
-    operations::{Operation, set_operations},
-    options::options::Options,
+    operations::{AgentOperation, Operation, RootOperation, set_operation},
     prompt::set_prompt,
 };
 use crate::server::grpc::{
@@ -47,15 +65,39 @@ use crate::server::grpc::{
 const EXIT_SUCCESS: i32 = 0;
 // const EXIT_FAILURE: i32 = 0;
 
-#[derive(Debug)]
-struct Commands {
-    pub op: Operation,
-    pub options: Options
+#[derive(Helper, Completer, Hinter, Validator)]
+pub struct RustylineHelper {
+    #[rustyline(Completer)]
+    completer: FilenameCompleter,
+    highlighter: MatchingBracketHighlighter,
+    #[rustyline(Validator)]
+    validator: MatchingBracketValidator,
+    pub colored_prompt: String,
 }
 
-impl Commands {
-    fn new(op: Operation, options: Options) -> Self {
-        Self { op, options }
+impl Highlighter for RustylineHelper {
+    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
+        &'s self,
+        prompt: &'p str,
+        default: bool,
+    ) -> Cow<'b, str> {
+        if default {
+            Borrowed(&self.colored_prompt)
+        } else {
+            Borrowed(prompt)
+        }
+    }
+
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        Owned("\x1b[1m".to_owned() + hint + "\x1b[m")
+    }
+
+    fn highlight<'l>(&self, line: &'l str, pos: usize) -> Cow<'l, str> {
+        self.highlighter.highlight(line, pos)
+    }
+
+    fn highlight_char(&self, line: &str, pos: usize, forced: bool) -> bool {
+        self.highlighter.highlight_char(line, pos, forced)
     }
 }
 
@@ -86,15 +128,13 @@ impl HermitClient {
         create_cmd(self)
     }
     
-    fn parse_args(&self, args: &[String]) -> clap::error::Result<Option<Commands>> {
+    fn parse_args(&self, args: &[String]) -> clap::error::Result<Operation> {
         let matches = self.cli().try_get_matches_from(args)?;
         self.parse_matches(&matches)
     }
     
-    fn parse_matches(&self, matches: &ArgMatches) -> clap::error::Result<Option<Commands>> {
-        let (op, options) = set_operations(self, matches);
-    
-        Ok(Some(Commands::new(op, options)))
+    fn parse_matches(&self, matches: &ArgMatches) -> clap::error::Result<Operation> {
+        Ok(set_operation(self, matches))
     }
     
     pub async fn run(&mut self) -> Result<()> {
@@ -118,17 +158,30 @@ impl HermitClient {
         // Add the current operator
         let _ = handle_operator_add(&mut client, self.operator_name.to_string()).await;
     
-        // Read a client command by reading lines.
-        let mut rl = DefaultEditor::new()?;
-        #[cfg(feature = "with-file-history")]
+        // Initialize the rustyline
+        let rl_config = rustyline::config::Config::builder()
+            .history_ignore_space(true)
+            .completion_type(CompletionType::List)
+            .edit_mode(EditMode::Emacs)
+            .build();
+        let rl_helper = RustylineHelper {
+            completer: FilenameCompleter::new(),
+            highlighter: MatchingBracketHighlighter::new(),
+            colored_prompt: "".to_owned(),
+            validator: MatchingBracketValidator::new(),
+        };
+        let mut rl = Editor::with_config(rl_config)?;
+        rl.set_helper(Some(rl_helper));
+        rl.bind_sequence(KeyEvent::alt('h'), Cmd::HistorySearchForward);
+        rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
         if rl.load_history("history.txt").is_err() {
             println!("No previous history.");
         }
-    
+        
         loop {
             println!(""); // Add newline above the prompt for good appearance.
-            let readline = rl.readline(
-                set_prompt(&self.mode).as_str());
+            let p = set_prompt(&mut rl, &self.mode);
+            let readline = rl.readline(&p);
             match readline {
                 Ok(line) => {
                     // Handle input
@@ -142,238 +195,130 @@ impl HermitClient {
                     };
                     args.insert(0, "client".into());
                     // Parse options
-                    let commands = match self.parse_args(&args) {
-                        Ok(commands) => commands,
+                    let op = match self.parse_args(&args) {
+                        Ok(o) => o,
                         Err(err) => {
                             println!("{}", err);
                             continue;
                         }
                     };
-    
-                    if let Some(commands) = commands {
-                        match &commands.op {
-                            // Root operations
-                            // Operator
-                            Operation::InfoOperator => {
-                                if let Some(operator_opt) = commands.options.operator_opt {
-                                    if let Some(name) = operator_opt.name {
-                                        let _ = handle_operator_info(&mut client, name).await;
-                                    } else {
-                                        println!("Specify an operator by ID or name.");
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::ListOperators => {
-                                let _ = handle_operator_list(&mut client).await;
-                            }
-                            // Listener
-                            Operation::AddListener => {
-                                if let Some(listener_opt) = commands.options.listener_opt {
-                                    let _ = handle_listener_add(
-                                        &mut client,
-                                        listener_opt.name.unwrap(),
-                                        listener_opt.domains.unwrap().join(","),
-                                        listener_opt.proto.unwrap(),
-                                        listener_opt.host.unwrap(),
-                                        listener_opt.port.unwrap(),
-                                    ).await;
-                                } else {
-                                    println!("Invalid command. Run `add help` for the usage.");
-                                    continue;
-                                }
-                            }
-                            Operation::DeleteListener => {
-                                if let Some(listener_opt) = commands.options.listener_opt {
-                                    if let Some(name) = listener_opt.name {
-                                        let _ = handle_listener_delete(&mut client, name).await;
-                                    } else {
-                                        println!("Specify target listener by ID or name.");
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::StartListener => {
-                                if let Some(listener_opt) = commands.options.listener_opt {
-                                    if let Some(name) = listener_opt.name {
-                                        let _ = handle_listener_start(&mut client, name).await;
-                                    } else {
-                                        println!("Specify target listener by ID or name.");
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::StopListener => {
-                                if let Some(listener_opt) = commands.options.listener_opt {
-                                    if let Some(name) = listener_opt.name {
-                                        let _ = handle_listener_stop(&mut client, name).await;
-                                    } else {
-                                        println!("Specify target listener by ID or name.");
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::InfoListener => {
-                                if let Some(listener_opt) = commands.options.listener_opt {
-                                    if let Some(name) = listener_opt.name {
-                                        let _ = handle_listener_info(&mut client, name).await;
-                                    } else {
-                                        println!("Specify target listener by ID or name.");
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::ListListeners => {
-                                let _ = handle_listener_list(&mut client).await;
-                            }
-                            // Agent
-                            Operation::UseAgent => {
-                                if let Some(agent_opt) = commands.options.agent_opt {
-                                    let ag_name = agent_opt.name;
 
-                                    match handle_agent_use(&mut client, ag_name.to_string()).await {
-                                        Ok(result) => {
-                                            let res_split: Vec<String> = result
-                                                .split(",")
-                                                .map(|s| s.to_string()).collect();
-                                            let agent_name = res_split[0].to_string();
-                                            let agent_os = res_split[1].to_string();
-                                            self.mode = Mode::Agent(agent_name, agent_os);
-                                            println!("{} The agent found. Switch to the agent mode.", "[+]".green());
-                                        }
-                                        Err(e) => {
-                                            println!("{} Error switching to the agent mode: {:?}", "[x]".red(), e);
-                                        }
-                                    }
+                    match op {
+                        Operation::Root(RootOperation::OperatorInfo { name}) => {
+                            let _ = handle_operator_info(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::OperatorList) => {
+                            let _ = handle_operator_list(&mut client).await;
+                        }
+                        Operation::Root(RootOperation::ListenerAdd {
+                            name,
+                            domains,
+                            proto,
+                            host,
+                            port,
+                        }) => {
+                            let _ = handle_listener_add(
+                                &mut client,
+                                name,
+                                domains.join(","),
+                                proto,
+                                host,
+                                port,
+                            ).await;
+                        }
+                        Operation::Root(RootOperation::ListenerDelete { name }) => {
+                            let _ = handle_listener_delete(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ListenerStart { name }) => {
+                            let _ = handle_listener_start(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ListenerStop { name }) => {
+                            let _ = handle_listener_stop(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ListenerInfo { name }) => {
+                            let _ = handle_listener_info(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ListenerList) => {
+                            let _ = handle_listener_list(&mut client).await;
+                        }
+                        Operation::Root(RootOperation::AgentUse { name }) => {
+                            match handle_agent_use(&mut client, name.to_string()).await {
+                                Ok(result) => {
+                                    let res_split: Vec<String> = result
+                                        .split(",")
+                                        .map(|s| s.to_string()).collect();
+                                    let agent_name = res_split[0].to_string();
+                                    let agent_os = res_split[1].to_string();
+                                    self.mode = Mode::Agent(agent_name, agent_os);
+                                    println!("{} Switch to the agent mode.", "[+]".green());
+                                }
+                                Err(e) => {
+                                    println!("{} Error switching to the agent mode: {:?}", "[x]".red(), e);
                                 }
                             }
-                            Operation::DeleteAgent => {
-                                if let Some(agent_opt) = commands.options.agent_opt {
-                                    let ag_name = agent_opt.name;
-                                    let _ = handle_agent_delete(&mut client, ag_name.to_string()).await;
-                                }
-                            }
-                            Operation::InfoAgent => {
-                                if let Some(agent_opt) = commands.options.agent_opt {
-                                    let ag_name = agent_opt.name;
-                                    let _ = handle_agent_info(&mut client, ag_name.to_string()).await;
-                                }
-                            }
-                            Operation::ListAgents => {
-                                let _ = handle_agent_list(&mut client).await;
-                            }
-                            // Implant
-                            Operation::GenerateImplant => {
-                                if let Some(implant_opt) = commands.options.implant_opt {
-                                    let name = implant_opt.name.unwrap();
-                                    let url = implant_opt.url.unwrap();
-                                    let os = implant_opt.os.unwrap();
-                                    let arch = implant_opt.arch.unwrap();
-                                    let format = implant_opt.format.unwrap();
-                                    let sleep = implant_opt.sleep.unwrap();
-                                    let jitter = implant_opt.jitter.unwrap();
-                                    let user_agent = implant_opt.user_agent.unwrap();
-                                    let killdate = implant_opt.killdate.unwrap();
-
-                                    let _ = handle_implant_generate(
-                                        &mut client,
-                                        name,
-                                        url,
-                                        os,
-                                        arch,
-                                        format,
-                                        sleep,
-                                        jitter,
-                                        user_agent,
-                                        killdate,
-                                    ).await;
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::DownloadImplant => {
-                                if let Some(implant_opt) = commands.options.implant_opt {
-                                    let name = implant_opt.name.unwrap();
-                                    let _ = handle_implant_download(&mut client, name).await;
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::DeleteImplant => {
-                                if let Some(implant_opt) = commands.options.implant_opt {
-                                    let name = implant_opt.name.unwrap();
-                                    let _ = handle_implant_delete(&mut client, name).await;
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::InfoImplant => {
-                                if let Some(implant_opt) = commands.options.implant_opt {
-                                    let name = implant_opt.name.unwrap();
-                                    let _ = handle_implant_info(&mut client, name).await;
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Operation::ListImplants => {
-                                let _ = handle_implant_list(&mut client).await;
-                            }
-                            // Misc
-                            Operation::Empty => {
-                                continue;
-                            }
-                            Operation::Error(e) => {
-                                println!("Error: {}", e);
-                                continue;
-                            }
-                            Operation::Exit => {
-                                process::exit(EXIT_SUCCESS);
-                            }
-                            Operation::Unknown => {
-                                println!("{} Unknown command. Run `help` for the usage.", "[!]".yellow());
-                                continue;
-                            }
-
-                            // Agent operations
-                            // Tasks
-                            Operation::AgentTask(task) => {
-                                let task_opt = commands.options.task_opt.unwrap();
-                                let t_agent = task_opt.agent_name.unwrap();
-                                let t_args = match task_opt.args {
-                                    Some(a) => a,
-                                    None => "".to_string(),
-                                };
-
-                                let _ = handle_agent_task(
-                                    &mut client,
-                                    t_agent.to_string(),
-                                    task.to_string(),
-                                    t_args.to_string()
-                                ).await;
-                            }
-                            // Misc
-                            Operation::AgentEmpty => {
-                                continue;
-                            }
-                            Operation::AgentExit => {
-                                println!("{} Exit the agent mode.", "[+]".green());
-                                self.mode = Mode::Root;
-                                continue;
-                            }
-                            Operation::AgentUnknown => {
-                                println!("{} Unknown command. Run `help` for the usage.", "[!]".yellow());
-                                continue;
-                            }
+                        }
+                        Operation::Root(RootOperation::AgentDelete { name }) => {
+                            let _ = handle_agent_delete(&mut client, name.to_string()).await;
+                        }
+                        Operation::Root(RootOperation::AgentInfo { name }) => {
+                            let _ = handle_agent_info(&mut client, name.to_string()).await;
+                        }
+                        Operation::Root(RootOperation::AgentList) => {
+                            let _ = handle_agent_list(&mut client).await;
+                        }
+                        Operation::Root(RootOperation::ImplantGenerate {
+                            name,
+                            url,
+                            os,
+                            arch,
+                            format,
+                            sleep,
+                            jitter,
+                            user_agent,
+                            killdate,
+                        }) => {
+                            let _ = handle_implant_generate(
+                                &mut client, name, url, os, arch, format, sleep, jitter, user_agent, killdate
+                            ).await;
+                        }
+                        Operation::Root(RootOperation::ImplantDownload { name }) => {
+                            let _ = handle_implant_download(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ImplantDelete { name }) => {
+                            let _ = handle_implant_delete(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ImplantInfo { name }) => {
+                            let _ = handle_implant_info(&mut client, name).await;
+                        }
+                        Operation::Root(RootOperation::ImplantList) => {
+                            let _ = handle_implant_list(&mut client).await;
+                        }
+                        Operation::Root(RootOperation::Exit) => {
+                            process::exit(EXIT_SUCCESS);
+                        }
+                        Operation::Agent(AgentOperation::Task { agent, task, args }) => {
+                            let _ = handle_agent_task(
+                                &mut client,
+                                agent,
+                                task,
+                                args,
+                            ).await;
+                        }
+                        Operation::Agent(AgentOperation::Exit) => {
+                            println!("{} Exit the agent mode.", "[+]".green());
+                            self.mode = Mode::Root;
+                            continue;
+                        }
+                        Operation::Empty => {
+                            continue;
+                        }
+                        Operation::Error { message } => {
+                            println!("Error: {}", message);
+                            continue;
+                        }
+                        Operation::Unknown => {
+                            println!("{} Unknown command. Run `help` for the usage.", "[!]".yellow());
+                            continue;
                         }
                     }
                 },

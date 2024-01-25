@@ -4,16 +4,17 @@ const LOGO: &'static str = "
         ┛┗┗┛┛┗┛ ┗┻ ┻ ";
 
 pub fn banner(mode: &str) {
-    println!("");
-    println!("{LOGO}");
-    
-    match mode {
-        "server" => { println!("          C2 SERVER"); }
-        "client" => { println!("          C2 CLIENT"); }
-        _ => {}
-    }
+    let mut output = String::from("\n");
+    output = output + format!("{}", LOGO).as_str();
+    output = output + "\n";
+    output = output + match mode {
+        "server" => "           C2 SERVER\n",
+        "client" => "           C2 CLIENT\n",
+        _ => "",
+    };
+    output = output + "      +++++++++++++++++\n";
+    output = output + "      DEVELOPED BY HDKS\n";
+    output = output + "\n";
 
-    println!("      +++++++++++++++++");
-    println!("      DEVELOPED BY HDKS");
-    println!("");
+    println!("\x1b[38;5;101m{}\x1b[0m", output);
 }

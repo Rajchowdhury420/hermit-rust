@@ -7,9 +7,11 @@ toc = true
 
 ## Install Automatically (Recommended)
 
-If you use Hermit on Linux system, it's recommended to run `install.sh` to make the installation process quickly and easily.
+If you're going to use Hermit on **Linux**, it's recommended to run `install.sh` to make the installation process quickly and easily.
 
 ```sh
+git clone https://github.com/hideckies/hermit.git
+cd hermit
 chmod +x install.sh
 ./install.sh
 ```
@@ -18,7 +20,7 @@ chmod +x install.sh
 
 ## Install Manually
 
-If you use Hermit on Windows system or would like to install manually, follow the steps:
+If you're going to use Hermit on **Windows** or would like to install manually, follow the steps:
 
 ### 1. Install Rust (If not installed)
 
