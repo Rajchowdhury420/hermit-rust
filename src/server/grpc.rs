@@ -102,6 +102,32 @@ impl HermitRpc for HermitRpcService {
         Ok(Response::new(result))
     }
 
+    async fn delete_operator(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
+        info!("'delete_operator' requested from {:?}", request.remote_addr().unwrap());
+
+        let server_lock = self.server.lock().await;
+
+        let target = request.into_inner().id_or_name;
+
+        let result = db::delete_operator(server_lock.db.path.to_string(), target);
+        match result {
+            Ok(_) => {
+                info!("The operator deleted.");
+            },
+            Err(e) => {
+                error!("Could not delete operator: {:?}", e);
+            }
+        }
+
+        let result = RpcResult {
+            success: true,
+            message: "The operator deleted.".to_string(),
+            data: Vec::new(),
+        };
+
+        Ok(Response::new(result))
+    }
+
     async fn info_operator(&self, request: Request<Target>) -> Result<Response<RpcResult>, Status> {
         info!("'info_operator' requested from {:?}", request.remote_addr().unwrap());
 

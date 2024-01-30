@@ -3,7 +3,7 @@ use clap::ArgMatches;
 
 use super::client::{HermitClient, Mode};
 use crate::{
-    server::listeners::https::generate_user_agent,
+    server::listeners::https::helpers::generate_user_agent,
     utils::random::random_name,
 };
 

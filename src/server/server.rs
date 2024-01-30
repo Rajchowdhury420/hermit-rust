@@ -11,7 +11,7 @@ use super::{
     crypto::aesgcm,
     db::{self, DB_PATH},
     grpc,
-    listeners::listener::Listener,
+    listeners::Listener,
     jobs::{find_job, Job, JobMessage},
 };
 use crate::{

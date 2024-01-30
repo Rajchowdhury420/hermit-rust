@@ -1,5 +1,6 @@
-mod db;
-pub use db::{DB, DB_PATH, init_db};
+use rusqlite::Result;
+
+use crate::utils::fs::get_app_dir;
 
 mod agents;
 pub use agents::{
@@ -54,3 +55,29 @@ pub use operators::{
     get_operator,
     get_all_operators,
 };
+
+pub const DB_PATH: &str = "server/hermit.db";
+
+#[derive(Debug)]
+pub struct DB {
+    pub path: String,
+}
+
+impl DB {
+    pub fn new() -> Self {
+        Self {
+            path: format!("{}/{}", get_app_dir(), DB_PATH.to_string()),
+        }
+    }
+
+}
+
+pub fn init_db(db_path: String) -> Result<()> {
+    init_listeners(db_path.to_owned())?;
+    init_agents(db_path.to_owned())?;
+    init_keypair(db_path.to_owned())?;
+    init_implants(db_path.to_owned())?;
+    init_operators(db_path.to_owned())?;
+
+    Ok(())
+}

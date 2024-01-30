@@ -9,6 +9,7 @@ service HermitRpc {
     // *OPERATIONS*
     // Operators
     rpc AddOperator(pb_operations.NewOperator) returns (pb_common.Result) {}
+    rpc DeleteOperator(pb_operations.Target) returns (pb_common.Result) {}
     rpc InfoOperator(pb_operations.Target) returns (pb_common.Result) {}
     rpc ListOperators(pb_common.Empty) returns (pb_common.Result) {}
     // Listeners

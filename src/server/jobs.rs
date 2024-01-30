@@ -8,8 +8,8 @@ use tokio::{
 };
 
 use super::listeners::{
-    https::start_https_listener,
-    listener::Listener,
+    https::listener::run as run_https,
+    Listener,
 };
 use crate::utils::str::{
     table_format,
@@ -68,7 +68,7 @@ impl Job {
                                 if !running {
                                     running = true;
                                     tokio::spawn(async move {
-                                        start_https_listener(
+                                        run_https(
                                             job_id,
                                             name_clone.to_string(),
                                             host_clone.to_string(),

@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 use log::warn;
 
-use crate::server::listeners::listener::Listener;
+use crate::server::listeners::Listener;
 
 pub fn init_listeners(db_path: String) -> Result<()> {
     let db = match Connection::open(db_path) {

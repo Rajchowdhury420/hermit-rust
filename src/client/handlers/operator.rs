@@ -25,7 +25,25 @@ pub async fn handle_operator_add(
         }
     };
     print_response(response);
+    Ok(())
+}
 
+pub async fn handle_operator_delete(
+    client: &mut HermitRpcClient<Channel>,
+    operator: String, // ID or name
+) -> Result<(), Error> {
+
+    let request = tonic::Request::new(pb_operations::Target {
+        id_or_name: operator,
+    });
+    let response = match client.delete_operator(request).await {
+        Ok(o) => o,
+        Err(e) => {
+            println!("\n{} Could not remove the operator: {}", "[x]".red(), e.message());
+            return Ok(());
+        }
+    };
+    print_response(response);
     Ok(())
 }
 
@@ -45,7 +63,6 @@ pub async fn handle_operator_info(
         }
     };
     print_response(response);
-
     Ok(())
 }
 
@@ -62,6 +79,5 @@ pub async fn handle_operator_list(
         }
     };
     print_response(response);
-
     Ok(())
 }
