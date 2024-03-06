@@ -116,8 +116,9 @@ chmod +x install.sh
 If you use Hermit on Windows system or would like to install manually, follow the [Installation](https://hermit.hdks.org/docs/installation/) page.
 
 ```sh
-git clone https://github.com/hideckies/hermit.git
+git clone https://github.com/hideckies/hermit-rust.git
 cd hermit
 cargo build --release
 ./target/release/hermit --version
+sudo cp ./target/release/hermit /usr/local/bin
 ```
