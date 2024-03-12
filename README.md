@@ -1,7 +1,14 @@
 # Hermit C2
 
+> [!CAUTION]
+> I created a Golang version of [Hermit](https://github.com/hideckies/hermit) because I didn't feel the need to write the entire framework in Rust, although I might be going to write the Windows payload in 'windows-rs'.
+
+<br />
+
 A post-exploitation, command and control framework written in Rust.  
 I'm developing it to learn how the C2 framework works and learn Rust programming language.
+
+<br />
 
 ![diagram](assets/diagram.png)
 
