@@ -135,4 +135,5 @@ sudo cp ./target/release/hermit /usr/local/bin
 <img width="1211" alt="image" src="https://github.com/Rajchowdhury420/hermit-rust/assets/30806882/cedb1410-376d-46c1-b44e-10d6e95e6d43">
 
 #### Live Demo
-<img width="1419" alt="image" src="https://github.com/Rajchowdhury420/hermit-rust/assets/30806882/7a9a489b-cfd2-472c-a4c3-1bf5dacb48f9">
+<img width="1542" alt="image" src="https://github.com/Rajchowdhury420/hermit-rust/assets/30806882/9f50e63b-02a4-465a-b58f-eede906bfbf4">
+
