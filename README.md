@@ -124,8 +124,15 @@ If you use Hermit on Windows system or would like to install manually, follow th
 
 ```sh
 git clone https://github.com/hideckies/hermit-rust.git
-cd hermit
+cd hermit-rust
 cargo build --release
 ./target/release/hermit --version
 sudo cp ./target/release/hermit /usr/local/bin
 ```
+
+#### Mac(Apple Silicon Support)
+##### Compiling manually
+<img width="1211" alt="image" src="https://github.com/Rajchowdhury420/hermit-rust/assets/30806882/cedb1410-376d-46c1-b44e-10d6e95e6d43">
+
+#### Live Demo
+<img width="1419" alt="image" src="https://github.com/Rajchowdhury420/hermit-rust/assets/30806882/7a9a489b-cfd2-472c-a4c3-1bf5dacb48f9">
